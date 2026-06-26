@@ -12,7 +12,10 @@ use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Policies\BookingPolicy;
 use Hwkdo\IntranetAppFuhrpark\Policies\DriverLicensePolicy;
 use Hwkdo\IntranetAppFuhrpark\Policies\VehiclePolicy;
+use Hwkdo\IntranetAppFuhrpark\Services\MsGraphBookingCalendarSync;
 use Hwkdo\IntranetAppFuhrpark\Services\NullBookingCalendarSync;
+use Hwkdo\IntranetAppFuhrpark\Support\RegistersFuhrparkUserRelations;
+use Hwkdo\MsGraphLaravel\Client;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Livewire\Volt\Volt;
@@ -35,12 +38,25 @@ class IntranetAppFuhrparkServiceProvider extends PackageServiceProvider
     {
         parent::register();
 
-        $this->app->bind(BookingCalendarSyncInterface::class, NullBookingCalendarSync::class);
+        $this->registerBookingCalendarSync();
+    }
+
+    protected function registerBookingCalendarSync(): void
+    {
+        $this->app->bind(BookingCalendarSyncInterface::class, function ($app) {
+            if (class_exists(Client::class)) {
+                return $app->make(MsGraphBookingCalendarSync::class);
+            }
+
+            return $app->make(NullBookingCalendarSync::class);
+        });
     }
 
     public function boot(): void
     {
         parent::boot();
+
+        RegistersFuhrparkUserRelations::register();
 
         Gate::policy(Booking::class, BookingPolicy::class);
         Gate::policy(Vehicle::class, VehiclePolicy::class);

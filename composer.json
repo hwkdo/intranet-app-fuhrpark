@@ -25,6 +25,9 @@
         "spatie/laravel-permission": "^6.16",
         "livewire/volt": "^1.6.7"
     },
+    "suggest": {
+        "hwkdo/ms-graph-laravel": "Outlook-Kalendersynchronisation für Fuhrpark-Buchungen"
+    },
     "require-dev": {
         "laravel/pint": "^1.14",
         "nunomaduro/collision": "^8.1.1||^7.10.0",
