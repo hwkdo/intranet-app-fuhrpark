@@ -14,6 +14,7 @@ use Hwkdo\IntranetAppFuhrpark\Models\Project;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class LegacyFuhrparkImportService
@@ -24,13 +25,14 @@ class LegacyFuhrparkImportService
 
     /**
      * @param  list<string>  $only
+     * @return array<string, array{api: int, imported: int, skipped: int}>
      */
     public function import(
         IntranetLegacyService $legacyService,
         string $from = '2025-01-01',
         bool $dryRun = false,
         array $only = [],
-    ): void {
+    ): array {
         $steps = $only === [] ? [
             'categories',
             'projects',
@@ -44,47 +46,61 @@ class LegacyFuhrparkImportService
             'logbook',
         ] : $only;
 
-        $bookingLegacyMap = [];
+        $summary = [];
 
         if ($this->shouldRun($steps, 'categories')) {
-            $this->importCategories($legacyService, $dryRun);
+            $summary['categories'] = $this->importCategories($legacyService, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'projects')) {
-            $this->importProjects($legacyService, $dryRun);
+            $summary['projects'] = $this->importProjects($legacyService, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'vehicles')) {
-            $this->importVehicles($legacyService, $dryRun);
+            $summary['vehicles'] = $this->importVehicles($legacyService, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'driver-licenses')) {
-            $this->importDriverLicenses($legacyService, $dryRun);
+            $summary['driver-licenses'] = $this->importDriverLicenses($legacyService, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'controls')) {
-            $this->importDriverLicenseControls($legacyService, $dryRun);
+            $summary['controls'] = $this->importDriverLicenseControls($legacyService, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'bookings')) {
-            $bookingLegacyMap = $this->importBookings($legacyService, $from, $dryRun);
+            $summary['bookings'] = $this->importBookings($legacyService, $from, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'charge-locks')) {
-            $this->importChargeLockBookings($legacyService, $from, $dryRun);
+            $summary['charge-locks'] = $this->importChargeLockBookings($legacyService, $from, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'handouts')) {
-            $this->importHandouts($legacyService, $from, $dryRun);
+            $summary['handouts'] = $this->importHandouts($legacyService, $from, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'returns')) {
-            $this->importReturns($legacyService, $from, $dryRun);
+            $summary['returns'] = $this->importReturns($legacyService, $from, $dryRun);
         }
 
         if ($this->shouldRun($steps, 'logbook')) {
-            $this->importLogbookEntries($legacyService, $from, $dryRun);
+            $summary['logbook'] = $this->importLogbookEntries($legacyService, $from, $dryRun);
         }
+
+        return $summary;
+    }
+
+    /**
+     * @return array{api: int, imported: int, skipped: int}
+     */
+    private function stepResult(int $api, int $imported): array
+    {
+        return [
+            'api' => $api,
+            'imported' => $imported,
+            'skipped' => max(0, $api - $imported),
+        ];
     }
 
     /**
@@ -95,10 +111,12 @@ class LegacyFuhrparkImportService
         return in_array($step, $steps, true);
     }
 
-    private function importCategories(IntranetLegacyService $legacyService, bool $dryRun): int
+    private function importCategories(IntranetLegacyService $legacyService, bool $dryRun): array
     {
-        $count = 0;
-        foreach ($legacyService->getFuhrparkCategoriesExport() as $legacy) {
+        $legacyItems = $legacyService->getFuhrparkCategoriesExport();
+        $imported = 0;
+
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -111,16 +129,18 @@ class LegacyFuhrparkImportService
                 );
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importProjects(IntranetLegacyService $legacyService, bool $dryRun): int
+    private function importProjects(IntranetLegacyService $legacyService, bool $dryRun): array
     {
-        $count = 0;
-        foreach ($legacyService->getFuhrparkProjectsExport() as $legacy) {
+        $legacyItems = $legacyService->getFuhrparkProjectsExport();
+        $imported = 0;
+
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -133,18 +153,21 @@ class LegacyFuhrparkImportService
                 );
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importVehicles(IntranetLegacyService $legacyService, bool $dryRun): int
+    private function importVehicles(IntranetLegacyService $legacyService, bool $dryRun): array
     {
         $categoryMap = VehicleCategory::query()->pluck('id', 'legacy_id');
-        $count = 0;
+        $legacyItems = $legacyService->getFuhrparkVehiclesExport();
+        $imported = 0;
+        $skippedMissingCategory = 0;
+        $skippedMissingStandort = 0;
 
-        foreach ($legacyService->getFuhrparkVehiclesExport() as $legacy) {
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -153,7 +176,15 @@ class LegacyFuhrparkImportService
             $categoryId = $categoryMap[(int) ($legacy['fahrzeugkategorie_id'] ?? 0)] ?? null;
             $standortId = $this->mapper->resolveStandortId($legacy['standort_id'] ?? null);
 
-            if ($categoryId === null || $standortId === null) {
+            if ($categoryId === null) {
+                $skippedMissingCategory++;
+
+                continue;
+            }
+
+            if ($standortId === null) {
+                $skippedMissingStandort++;
+
                 continue;
             }
 
@@ -166,16 +197,25 @@ class LegacyFuhrparkImportService
                 );
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        if ($skippedMissingCategory > 0 || $skippedMissingStandort > 0) {
+            Log::warning('LegacyFuhrparkImportService: Fahrzeuge übersprungen', [
+                'missing_category' => $skippedMissingCategory,
+                'missing_standort' => $skippedMissingStandort,
+            ]);
+        }
+
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importDriverLicenses(IntranetLegacyService $legacyService, bool $dryRun): int
+    private function importDriverLicenses(IntranetLegacyService $legacyService, bool $dryRun): array
     {
-        $count = 0;
-        foreach ($legacyService->getFuhrparkDriverLicensesExport() as $legacy) {
+        $legacyItems = $legacyService->getFuhrparkDriverLicensesExport();
+        $imported = 0;
+
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -190,18 +230,19 @@ class LegacyFuhrparkImportService
                 $this->upsertDriverLicense($legacyId, $legacy, $userId);
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importDriverLicenseControls(IntranetLegacyService $legacyService, bool $dryRun): int
+    private function importDriverLicenseControls(IntranetLegacyService $legacyService, bool $dryRun): array
     {
         $licenseMap = DriverLicense::query()->pluck('id', 'legacy_id');
-        $count = 0;
+        $legacyItems = $legacyService->getFuhrparkDriverLicenseControlsExport();
+        $imported = 0;
 
-        foreach ($legacyService->getFuhrparkDriverLicenseControlsExport() as $legacy) {
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -236,25 +277,22 @@ class LegacyFuhrparkImportService
                 }
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    /**
-     * @return array<int, int>
-     */
     private function importBookings(IntranetLegacyService $legacyService, string $from, bool $dryRun): array
     {
         $vehicleMap = Vehicle::query()
             ->whereNotNull('legacy_id')
             ->pluck('id', 'legacy_id')
             ->all();
-        $map = [];
-        $count = 0;
+        $legacyItems = $legacyService->getFuhrparkBookingsExport($from);
+        $imported = 0;
 
-        foreach ($legacyService->getFuhrparkBookingsExport($from) as $legacy) {
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1 || $this->mapper->isChargeLockSecondPass($legacy)) {
                 continue;
@@ -272,29 +310,29 @@ class LegacyFuhrparkImportService
             $attributes = $this->mapper->mapBooking($legacy, (int) $vehicleId, $userId, $driverId, $lockUserId);
 
             if (! $dryRun) {
-                $booking = Booking::query()->updateOrCreate(
+                Booking::query()->updateOrCreate(
                     ['legacy_id' => $legacyId],
                     $attributes,
                 );
-                $map[$legacyId] = (int) $booking->id;
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $map;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importChargeLockBookings(IntranetLegacyService $legacyService, string $from, bool $dryRun): int
+    private function importChargeLockBookings(IntranetLegacyService $legacyService, string $from, bool $dryRun): array
     {
         $vehicleMap = Vehicle::query()
             ->whereNotNull('legacy_id')
             ->pluck('id', 'legacy_id')
             ->all();
         $parentMap = Booking::query()->pluck('id', 'legacy_id');
-        $count = 0;
+        $legacyItems = $legacyService->getFuhrparkBookingsExport($from);
+        $imported = 0;
 
-        foreach ($legacyService->getFuhrparkBookingsExport($from) as $legacy) {
+        foreach ($legacyItems as $legacy) {
             if (! $this->mapper->isChargeLockSecondPass($legacy)) {
                 continue;
             }
@@ -324,18 +362,19 @@ class LegacyFuhrparkImportService
                 );
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importHandouts(IntranetLegacyService $legacyService, string $from, bool $dryRun): int
+    private function importHandouts(IntranetLegacyService $legacyService, string $from, bool $dryRun): array
     {
         $bookingMap = Booking::query()->pluck('id', 'legacy_id');
-        $count = 0;
+        $legacyItems = $legacyService->getFuhrparkHandoutsExport($from);
+        $imported = 0;
 
-        foreach ($legacyService->getFuhrparkHandoutsExport($from) as $legacy) {
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -354,20 +393,21 @@ class LegacyFuhrparkImportService
                 $this->upsertHandout($legacyId, (int) $bookingId, $attributes);
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importReturns(IntranetLegacyService $legacyService, string $from, bool $dryRun): int
+    private function importReturns(IntranetLegacyService $legacyService, string $from, bool $dryRun): array
     {
         $handoutMap = Handout::query()->pluck('id', 'legacy_id');
         $ausgabeToHandout = Handout::query()->pluck('id', 'booking_id');
         $bookingMap = Booking::query()->pluck('id', 'legacy_id');
-        $count = 0;
+        $legacyItems = $legacyService->getFuhrparkReturnsExport($from);
+        $imported = 0;
 
-        foreach ($legacyService->getFuhrparkReturnsExport($from) as $legacy) {
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -391,19 +431,20 @@ class LegacyFuhrparkImportService
                 $this->upsertReturn($legacyId, (int) $handoutId, $attributes);
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
-    private function importLogbookEntries(IntranetLegacyService $legacyService, string $from, bool $dryRun): int
+    private function importLogbookEntries(IntranetLegacyService $legacyService, string $from, bool $dryRun): array
     {
         $bookingMap = Booking::query()->pluck('id', 'legacy_id');
         $projectMap = Project::query()->pluck('id', 'legacy_id');
-        $count = 0;
+        $legacyItems = $legacyService->getFuhrparkLogbookEntriesExport($from);
+        $imported = 0;
 
-        foreach ($legacyService->getFuhrparkLogbookEntriesExport($from) as $legacy) {
+        foreach ($legacyItems as $legacy) {
             $legacyId = (int) ($legacy['id'] ?? 0);
             if ($legacyId < 1) {
                 continue;
@@ -427,10 +468,10 @@ class LegacyFuhrparkImportService
                 $this->upsertLogbookEntry($legacyId, (int) $bookingId, $attributes);
             }
 
-            $count++;
+            $imported++;
         }
 
-        return $count;
+        return $this->stepResult(count($legacyItems), $imported);
     }
 
     /**

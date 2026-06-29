@@ -13,6 +13,7 @@ use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class FuhrparkAdminStatisticsService
@@ -91,6 +92,506 @@ class FuhrparkAdminStatisticsService
             'top_vehicles_by_km' => $this->topVehiclesByKm($from, $to, limit: 5),
             'top_drivers_by_km' => $this->topDriversByKm($from, $to, limit: 5),
             'bookings_by_purpose' => $this->bookingsByPurpose($from, $to),
+            'utilization' => $this->collectUtilization($from, $to),
+        ];
+    }
+
+    /**
+     * @return array{
+     *     fleet_size: int,
+     *     booked_vehicle_hours: float,
+     *     available_vehicle_hours: float,
+     *     average_utilization_percent: float,
+     *     peak_concurrent_bookings: int,
+     *     peak_utilization_percent: float,
+     *     full_capacity_days: int,
+     *     high_demand_days: int,
+     *     vehicles_without_bookings: int,
+     *     vehicles_low_utilization: int,
+     *     assessment: array{status: string, label: string, hint: string},
+     *     vehicles: list<array{license_plate: string, booked_hours: float, available_hours: float, utilization_percent: float, bookings: int}>,
+     *     business_hours_label: string,
+     * }
+     */
+    private function collectUtilization(?CarbonInterface $from, ?CarbonInterface $to): array
+    {
+        [$windowFrom, $windowTo] = $this->resolveUtilizationWindow($from, $to);
+        $businessHoursLabel = $this->businessHoursLabel();
+
+        $candidateVehicles = Vehicle::query()
+            ->where('active', true)
+            ->orderBy('license_plate')
+            ->get();
+
+        $vehiclesInScope = $candidateVehicles
+            ->filter(fn (Vehicle $vehicle): bool => $this->vehicleIsAvailableInPeriod($vehicle, $windowFrom, $windowTo))
+            ->values();
+
+        if ($vehiclesInScope->isEmpty()) {
+            return [
+                'fleet_size' => 0,
+                'booked_vehicle_hours' => 0.0,
+                'available_vehicle_hours' => 0.0,
+                'average_utilization_percent' => 0.0,
+                'peak_concurrent_bookings' => 0,
+                'peak_utilization_percent' => 0.0,
+                'full_capacity_days' => 0,
+                'high_demand_days' => 0,
+                'vehicles_without_bookings' => 0,
+                'vehicles_low_utilization' => 0,
+                'assessment' => [
+                    'status' => 'balanced',
+                    'label' => 'Keine verfügbaren Fahrzeuge',
+                    'hint' => 'Im gewählten Zeitraum stand kein aktives Fahrzeug zur Verfügung.',
+                ],
+                'vehicles' => [],
+                'business_hours_label' => $businessHoursLabel,
+            ];
+        }
+
+        $vehiclesById = $vehiclesInScope->keyBy('id');
+        $vehicleIdsInScope = $vehiclesInScope->pluck('id')->all();
+
+        $bookings = $this->tripBookingsQuery($windowFrom, $windowTo)
+            ->whereIn('vehicle_id', $vehicleIdsInScope)
+            ->get(['id', 'vehicle_id', 'starts_at', 'ends_at']);
+
+        $availableVehicleHours = 0.0;
+        $availableHoursPerVehicle = [];
+
+        foreach ($vehiclesInScope as $vehicle) {
+            $hours = $this->availableBusinessHoursForVehicle($vehicle, $windowFrom, $windowTo);
+            $availableHoursPerVehicle[$vehicle->id] = $hours;
+            $availableVehicleHours += $hours;
+        }
+
+        $utilizedVehicles = $vehiclesInScope
+            ->filter(fn (Vehicle $vehicle): bool => ($availableHoursPerVehicle[$vehicle->id] ?? 0.0) > 0)
+            ->values();
+
+        $fleetSize = $utilizedVehicles->count();
+
+        $bookedVehicleHours = 0.0;
+        /** @var array<int, float> $bookedHoursPerVehicle */
+        $bookedHoursPerVehicle = [];
+        /** @var array<int, int> $bookingCountPerVehicle */
+        $bookingCountPerVehicle = [];
+
+        foreach ($bookings as $booking) {
+            $vehicle = $vehiclesById->get($booking->vehicle_id);
+
+            if ($vehicle === null) {
+                continue;
+            }
+
+            $hours = $this->bookedBusinessHoursForVehicle(
+                $vehicle,
+                $booking->starts_at,
+                $booking->ends_at,
+                $windowFrom,
+                $windowTo,
+            );
+
+            if ($hours <= 0) {
+                continue;
+            }
+
+            $bookedVehicleHours += $hours;
+            $bookedHoursPerVehicle[$booking->vehicle_id] = ($bookedHoursPerVehicle[$booking->vehicle_id] ?? 0) + $hours;
+            $bookingCountPerVehicle[$booking->vehicle_id] = ($bookingCountPerVehicle[$booking->vehicle_id] ?? 0) + 1;
+        }
+
+        $averageUtilizationPercent = $availableVehicleHours > 0
+            ? round(($bookedVehicleHours / $availableVehicleHours) * 100, 1)
+            : 0.0;
+
+        $peakStats = $this->calculatePeakUtilization($bookings, $windowFrom, $windowTo, $utilizedVehicles);
+
+        $vehiclesWithoutBookings = $utilizedVehicles
+            ->filter(fn (Vehicle $vehicle): bool => ! isset($bookingCountPerVehicle[$vehicle->id]))
+            ->count();
+
+        $vehicleRows = $utilizedVehicles->map(function (Vehicle $vehicle) use (
+            $availableHoursPerVehicle,
+            $bookedHoursPerVehicle,
+            $bookingCountPerVehicle,
+        ): array {
+            $availableHours = $availableHoursPerVehicle[$vehicle->id] ?? 0.0;
+            $bookedHours = $bookedHoursPerVehicle[$vehicle->id] ?? 0.0;
+
+            return [
+                'license_plate' => $vehicle->license_plate,
+                'booked_hours' => round($bookedHours, 1),
+                'available_hours' => round($availableHours, 1),
+                'utilization_percent' => $availableHours > 0
+                    ? round(($bookedHours / $availableHours) * 100, 1)
+                    : 0.0,
+                'bookings' => $bookingCountPerVehicle[$vehicle->id] ?? 0,
+            ];
+        })
+            ->sortByDesc('utilization_percent')
+            ->values()
+            ->all();
+
+        $vehiclesLowUtilization = collect($vehicleRows)
+            ->filter(fn (array $row): bool => $row['utilization_percent'] < 15)
+            ->count();
+
+        return [
+            'fleet_size' => $fleetSize,
+            'booked_vehicle_hours' => round($bookedVehicleHours, 1),
+            'available_vehicle_hours' => round($availableVehicleHours, 1),
+            'average_utilization_percent' => $averageUtilizationPercent,
+            'peak_concurrent_bookings' => $peakStats['peak_concurrent'],
+            'peak_utilization_percent' => $peakStats['peak_percent'],
+            'full_capacity_days' => $peakStats['full_capacity_days'],
+            'high_demand_days' => $peakStats['high_demand_days'],
+            'vehicles_without_bookings' => $vehiclesWithoutBookings,
+            'vehicles_low_utilization' => $vehiclesLowUtilization,
+            'assessment' => $this->assessFleetUtilization(
+                $averageUtilizationPercent,
+                $peakStats['peak_percent'],
+                $vehiclesWithoutBookings,
+                $fleetSize,
+                $peakStats['full_capacity_days'],
+            ),
+            'vehicles' => $vehicleRows,
+            'business_hours_label' => $businessHoursLabel,
+        ];
+    }
+
+    /**
+     * @return array{start: int, end: int, days: list<int>}
+     */
+    private function businessHoursConfig(): array
+    {
+        /** @var list<int> $days */
+        $days = config('intranet-app-fuhrpark.utilization.business_days', [1, 2, 3, 4, 5]);
+
+        return [
+            'start' => (int) config('intranet-app-fuhrpark.utilization.business_hour_start', 7),
+            'end' => (int) config('intranet-app-fuhrpark.utilization.business_hour_end', 18),
+            'days' => $days,
+        ];
+    }
+
+    private function businessHoursLabel(): string
+    {
+        $config = $this->businessHoursConfig();
+
+        $dayLabels = [
+            1 => 'Mo',
+            2 => 'Di',
+            3 => 'Mi',
+            4 => 'Do',
+            5 => 'Fr',
+            6 => 'Sa',
+            7 => 'So',
+        ];
+
+        $days = collect($config['days'])
+            ->map(fn (int $day): string => $dayLabels[$day] ?? (string) $day)
+            ->implode('–');
+
+        if ($days === 'Mo–Di–Mi–Do–Fr' || $config['days'] === [1, 2, 3, 4, 5]) {
+            $days = 'Mo–Fr';
+        }
+
+        return sprintf(
+            '%02d:00–%02d:00 (%s)',
+            $config['start'],
+            $config['end'],
+            $days,
+        );
+    }
+
+    /**
+     * @param  callable(CarbonInterface, CarbonInterface): void  $callback
+     */
+    private function eachBusinessHourSegment(
+        CarbonInterface $from,
+        CarbonInterface $to,
+        callable $callback,
+    ): void {
+        $config = $this->businessHoursConfig();
+        $cursor = $from->copy()->startOfDay();
+        $end = $to->copy()->endOfDay();
+
+        while ($cursor->lessThanOrEqualTo($end)) {
+            if (in_array($cursor->isoWeekday(), $config['days'], true)) {
+                $segmentStart = $cursor->copy()->setTime($config['start'], 0);
+                $segmentEnd = $cursor->copy()->setTime($config['end'], 0);
+
+                if ($segmentEnd->greaterThan($from)) {
+                    $clippedStart = $segmentStart->greaterThan($from) ? $segmentStart : $from;
+                    $clippedEnd = $segmentEnd->lessThan($to) ? $segmentEnd : $to;
+
+                    if ($clippedEnd->greaterThan($clippedStart)) {
+                        $callback($clippedStart, $clippedEnd);
+                    }
+                }
+            }
+
+            $cursor->addDay();
+        }
+    }
+
+    private function vehicleIsAvailableInPeriod(
+        Vehicle $vehicle,
+        CarbonInterface $from,
+        CarbonInterface $to,
+    ): bool {
+        if (! $vehicle->active) {
+            return false;
+        }
+
+        if ($vehicle->available_until !== null && $vehicle->available_until->lessThanOrEqualTo($from)) {
+            return false;
+        }
+
+        if ($vehicle->available_from !== null && $vehicle->available_from->greaterThanOrEqualTo($to)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function availableBusinessHoursForVehicle(
+        Vehicle $vehicle,
+        CarbonInterface $from,
+        CarbonInterface $to,
+    ): float {
+        if (! $this->vehicleIsAvailableInPeriod($vehicle, $from, $to)) {
+            return 0.0;
+        }
+
+        $hours = 0.0;
+
+        $this->eachBusinessHourSegment($from, $to, function (CarbonInterface $segmentStart, CarbonInterface $segmentEnd) use ($vehicle, &$hours): void {
+            $windowStart = $segmentStart;
+            $windowEnd = $segmentEnd;
+
+            if ($vehicle->available_from !== null && $vehicle->available_from->greaterThan($windowStart)) {
+                $windowStart = $vehicle->available_from->copy();
+            }
+
+            if ($vehicle->available_until !== null && $vehicle->available_until->lessThan($windowEnd)) {
+                $windowEnd = $vehicle->available_until->copy();
+            }
+
+            if ($windowEnd->greaterThan($windowStart)) {
+                $hours += $windowStart->floatDiffInHours($windowEnd);
+            }
+        });
+
+        return $hours;
+    }
+
+    private function bookedBusinessHoursForVehicle(
+        Vehicle $vehicle,
+        CarbonInterface $bookingStart,
+        CarbonInterface $bookingEnd,
+        CarbonInterface $from,
+        CarbonInterface $to,
+    ): float {
+        if (! $this->vehicleIsAvailableInPeriod($vehicle, $from, $to)) {
+            return 0.0;
+        }
+
+        $hours = 0.0;
+
+        $this->eachBusinessHourSegment($from, $to, function (CarbonInterface $segmentStart, CarbonInterface $segmentEnd) use ($vehicle, $bookingStart, $bookingEnd, &$hours): void {
+            $overlapStart = $bookingStart->greaterThan($segmentStart) ? $bookingStart : $segmentStart;
+            $overlapEnd = $bookingEnd->lessThan($segmentEnd) ? $bookingEnd : $segmentEnd;
+
+            if ($overlapEnd->lessThanOrEqualTo($overlapStart)) {
+                return;
+            }
+
+            $windowStart = $overlapStart;
+            $windowEnd = $overlapEnd;
+
+            if ($vehicle->available_from !== null && $vehicle->available_from->greaterThan($windowStart)) {
+                $windowStart = $vehicle->available_from->copy();
+            }
+
+            if ($vehicle->available_until !== null && $vehicle->available_until->lessThan($windowEnd)) {
+                $windowEnd = $vehicle->available_until->copy();
+            }
+
+            if ($windowEnd->greaterThan($windowStart)) {
+                $hours += $windowStart->floatDiffInHours($windowEnd);
+            }
+        });
+
+        return $hours;
+    }
+
+    /**
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
+    private function resolveUtilizationWindow(?CarbonInterface $from, ?CarbonInterface $to): array
+    {
+        if ($from !== null && $to !== null) {
+            return [$from, $to];
+        }
+
+        $earliestBooking = Booking::query()->min('starts_at');
+        $windowFrom = $earliestBooking !== null
+            ? Carbon::parse($earliestBooking)->startOfDay()
+            : now()->subYear()->startOfDay();
+
+        return [$windowFrom, now()];
+    }
+
+    /**
+     * @param  Collection<int, Booking>  $bookings
+     * @param  Collection<int, Vehicle>  $vehiclesInScope
+     * @return array{peak_concurrent: int, peak_percent: float, full_capacity_days: int, high_demand_days: int}
+     */
+    private function calculatePeakUtilization(
+        Collection $bookings,
+        CarbonInterface $from,
+        CarbonInterface $to,
+        Collection $vehiclesInScope,
+    ): array {
+        $events = [];
+
+        foreach ($bookings as $booking) {
+            $this->eachBusinessHourSegment($from, $to, function (CarbonInterface $segmentStart, CarbonInterface $segmentEnd) use ($booking, &$events): void {
+                $overlapStart = $booking->starts_at->greaterThan($segmentStart) ? $booking->starts_at : $segmentStart;
+                $overlapEnd = $booking->ends_at->lessThan($segmentEnd) ? $booking->ends_at : $segmentEnd;
+
+                if ($overlapEnd->greaterThan($overlapStart)) {
+                    $events[] = ['time' => $overlapStart->timestamp, 'delta' => 1];
+                    $events[] = ['time' => $overlapEnd->timestamp, 'delta' => -1];
+                }
+            });
+        }
+
+        $peakConcurrent = 0;
+
+        if ($events !== []) {
+            usort($events, fn (array $a, array $b): int => $a['time'] <=> $b['time']);
+
+            $current = 0;
+
+            foreach ($events as $event) {
+                $current += $event['delta'];
+                $peakConcurrent = max($peakConcurrent, $current);
+            }
+        }
+
+        $fullCapacityDays = 0;
+        $highDemandDays = 0;
+        $maxDayFleetSize = 0;
+        $config = $this->businessHoursConfig();
+        $cursor = $from->copy()->startOfDay();
+
+        while ($cursor->lessThanOrEqualTo($to)) {
+            if (! in_array($cursor->isoWeekday(), $config['days'], true)) {
+                $cursor->addDay();
+
+                continue;
+            }
+
+            $dayFleetSize = $this->countVehiclesAvailableOnBusinessDay($vehiclesInScope, $cursor);
+            $maxDayFleetSize = max($maxDayFleetSize, $dayFleetSize);
+
+            $dayEvents = [];
+
+            foreach ($bookings as $booking) {
+                $segmentStart = $cursor->copy()->setTime($config['start'], 0);
+                $segmentEnd = $cursor->copy()->setTime($config['end'], 0);
+                $overlapStart = $booking->starts_at->greaterThan($segmentStart) ? $booking->starts_at : $segmentStart;
+                $overlapEnd = $booking->ends_at->lessThan($segmentEnd) ? $booking->ends_at : $segmentEnd;
+
+                if ($overlapEnd->greaterThan($overlapStart)) {
+                    $dayEvents[] = ['time' => $overlapStart->timestamp, 'delta' => 1];
+                    $dayEvents[] = ['time' => $overlapEnd->timestamp, 'delta' => -1];
+                }
+            }
+
+            $dayPeak = 0;
+
+            if ($dayEvents !== []) {
+                usort($dayEvents, fn (array $a, array $b): int => $a['time'] <=> $b['time']);
+
+                $dayCurrent = 0;
+
+                foreach ($dayEvents as $event) {
+                    $dayCurrent += $event['delta'];
+                    $dayPeak = max($dayPeak, $dayCurrent);
+                }
+            }
+
+            if ($dayFleetSize > 0 && $dayPeak >= $dayFleetSize) {
+                $fullCapacityDays++;
+            }
+
+            $highDemandThreshold = (int) ceil($dayFleetSize * 0.8);
+
+            if ($dayFleetSize > 0 && $dayPeak >= $highDemandThreshold) {
+                $highDemandDays++;
+            }
+
+            $cursor->addDay();
+        }
+
+        return [
+            'peak_concurrent' => $peakConcurrent,
+            'peak_percent' => $maxDayFleetSize > 0 ? round(($peakConcurrent / $maxDayFleetSize) * 100, 1) : 0.0,
+            'full_capacity_days' => $fullCapacityDays,
+            'high_demand_days' => $highDemandDays,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, Vehicle>  $vehicles
+     */
+    private function countVehiclesAvailableOnBusinessDay(Collection $vehicles, CarbonInterface $day): int
+    {
+        $config = $this->businessHoursConfig();
+        $segmentStart = $day->copy()->setTime($config['start'], 0);
+        $segmentEnd = $day->copy()->setTime($config['end'], 0);
+
+        return $vehicles->filter(
+            fn (Vehicle $vehicle): bool => $this->availableBusinessHoursForVehicle($vehicle, $segmentStart, $segmentEnd) > 0,
+        )->count();
+    }
+
+    /**
+     * @return array{status: string, label: string, hint: string}
+     */
+    private function assessFleetUtilization(
+        float $averageUtilizationPercent,
+        float $peakUtilizationPercent,
+        int $vehiclesWithoutBookings,
+        int $fleetSize,
+        int $fullCapacityDays,
+    ): array {
+        $idleSharePercent = $fleetSize > 0 ? ($vehiclesWithoutBookings / $fleetSize) * 100 : 0.0;
+
+        if ($peakUtilizationPercent >= 90 || $fullCapacityDays > 0 || $averageUtilizationPercent >= 65) {
+            return [
+                'status' => 'shortage',
+                'label' => 'Tendenz: zu wenig Fahrzeuge',
+                'hint' => 'Hohe Auslastung oder Volllast-Tage im Zeitraum. Zusätzliche Fahrzeuge, Standort-Umverteilung oder Buchungsfenster prüfen.',
+            ];
+        }
+
+        if ($averageUtilizationPercent < 20 && $idleSharePercent >= 25) {
+            return [
+                'status' => 'surplus',
+                'label' => 'Tendenz: Überkapazität',
+                'hint' => 'Viele Fahrzeuge ohne Buchungen und insgesamt niedrige Auslastung. Flottengröße oder Standortverteilung kritisch prüfen.',
+            ];
+        }
+
+        return [
+            'status' => 'balanced',
+            'label' => 'Flotte wirkt ausgewogen',
+            'hint' => 'Auslastung und Spitzenlast liegen in einem typischen Zielkorridor. Regelmäßige Kontrolle reicht aus.',
         ];
     }
 

@@ -14,6 +14,13 @@ return [
         'max_no_show' => 3,
     ],
 
+    'utilization' => [
+        'business_hour_start' => 7,
+        'business_hour_end' => 18,
+        /** @var list<int> ISO weekday: 1 = Monday … 7 = Sunday */
+        'business_days' => [1, 2, 3, 4, 5],
+    ],
+
     'roles' => [
         'admin' => [
             'name' => 'App-Fuhrpark-Admin',

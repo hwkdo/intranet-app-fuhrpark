@@ -138,11 +138,172 @@ test('admin statistics separates electric planned route and combustion driven km
         ->and($stats['overview']['combustion_route_km'])->toBe(180);
 });
 
+test('admin statistics calculates fleet utilization metrics', function (): void {
+    $standort = Standort::query()->create(['name' => 'Statistik-Standort']);
+    fuhrparkMarkVehicleStandort($standort);
+
+    $vehicleA = fuhrparkStatisticsVehicle($standort, 'DO-HW 500');
+    $vehicleB = fuhrparkStatisticsVehicle($standort, 'DO-HW 501');
+    $booker = User::factory()->create();
+    $driver = User::factory()->create();
+
+    $day = now()->startOfMonth()->addDay();
+
+    Booking::factory()->create([
+        'vehicle_id' => $vehicleA->id,
+        'user_id' => $booker->id,
+        'driver_id' => $driver->id,
+        'starts_at' => $day->copy()->setTime(8, 0),
+        'ends_at' => $day->copy()->setTime(12, 0),
+    ]);
+
+    Booking::factory()->create([
+        'vehicle_id' => $vehicleA->id,
+        'user_id' => $booker->id,
+        'driver_id' => $driver->id,
+        'starts_at' => $day->copy()->setTime(13, 0),
+        'ends_at' => $day->copy()->setTime(15, 0),
+    ]);
+
+    $stats = app(FuhrparkAdminStatisticsService::class)->collect('month');
+    $utilization = $stats['utilization'];
+
+    expect($utilization['fleet_size'])->toBe(2)
+        ->and($utilization['booked_vehicle_hours'])->toBe(6.0)
+        ->and($utilization['vehicles_without_bookings'])->toBe(1)
+        ->and($utilization['peak_concurrent_bookings'])->toBe(1)
+        ->and($utilization['vehicles'])->toHaveCount(2)
+        ->and($utilization['vehicles'][0]['license_plate'])->toBe('DO-HW 500')
+        ->and($utilization['vehicles'][0]['bookings'])->toBe(2);
+});
+
+test('admin statistics excludes inactive and out of period vehicles from utilization', function (): void {
+    $standort = Standort::query()->create(['name' => 'Statistik-Standort']);
+    fuhrparkMarkVehicleStandort($standort);
+
+    $periodStart = now()->startOfMonth();
+    $periodEnd = now()->endOfMonth();
+    $booker = User::factory()->create();
+    $driver = User::factory()->create();
+
+    $day = $periodStart->copy()->addDay();
+    while (! in_array($day->isoWeekday(), [1, 2, 3, 4, 5], true)) {
+        $day = $day->addDay();
+    }
+
+    $activeVehicle = fuhrparkStatisticsVehicle($standort, 'DO-HW 700');
+
+    $inactiveVehicle = fuhrparkStatisticsVehicle($standort, 'DO-HW 701');
+    $inactiveVehicle->update(['active' => false]);
+
+    $expiredVehicle = fuhrparkStatisticsVehicle($standort, 'DO-HW 702');
+    $expiredVehicle->update(['available_until' => $periodStart->copy()->subDay()]);
+
+    $futureVehicle = fuhrparkStatisticsVehicle($standort, 'DO-HW 703');
+    $futureVehicle->update(['available_from' => $periodEnd->copy()->addDay()]);
+
+    foreach ([$inactiveVehicle, $expiredVehicle, $futureVehicle] as $vehicle) {
+        Booking::factory()->create([
+            'vehicle_id' => $vehicle->id,
+            'user_id' => $booker->id,
+            'driver_id' => $driver->id,
+            'starts_at' => $day->copy()->setTime(9, 0),
+            'ends_at' => $day->copy()->setTime(11, 0),
+        ]);
+    }
+
+    Booking::factory()->create([
+        'vehicle_id' => $activeVehicle->id,
+        'user_id' => $booker->id,
+        'driver_id' => $driver->id,
+        'starts_at' => $day->copy()->setTime(9, 0),
+        'ends_at' => $day->copy()->setTime(11, 0),
+    ]);
+
+    $utilization = app(FuhrparkAdminStatisticsService::class)->collect('month')['utilization'];
+
+    expect($utilization['fleet_size'])->toBe(1)
+        ->and($utilization['booked_vehicle_hours'])->toBe(2.0)
+        ->and($utilization['vehicles'])->toHaveCount(1)
+        ->and($utilization['vehicles'][0]['license_plate'])->toBe('DO-HW 700');
+});
+
+test('admin statistics only counts partial availability hours in utilization window', function (): void {
+    $standort = Standort::query()->create(['name' => 'Statistik-Standort']);
+    fuhrparkMarkVehicleStandort($standort);
+
+    $day = now()->startOfMonth()->addDay();
+    while (! in_array($day->isoWeekday(), [1, 2, 3, 4, 5], true)) {
+        $day = $day->addDay();
+    }
+
+    $vehicle = fuhrparkStatisticsVehicle($standort, 'DO-HW 800');
+    $vehicle->update([
+        'available_from' => $day->copy()->setTime(10, 0),
+        'available_until' => $day->copy()->setTime(18, 0),
+    ]);
+
+    $booker = User::factory()->create();
+    $driver = User::factory()->create();
+
+    Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'user_id' => $booker->id,
+        'driver_id' => $driver->id,
+        'starts_at' => $day->copy()->setTime(8, 0),
+        'ends_at' => $day->copy()->setTime(12, 0),
+    ]);
+
+    $utilization = app(FuhrparkAdminStatisticsService::class)->collect('month')['utilization'];
+
+    expect($utilization['fleet_size'])->toBe(1)
+        ->and($utilization['vehicles'][0]['available_hours'])->toBe(8.0)
+        ->and($utilization['vehicles'][0]['booked_hours'])->toBe(2.0);
+});
+
+test('admin statistics ignores overnight hours for fleet utilization', function (): void {
+    $standort = Standort::query()->create(['name' => 'Statistik-Standort']);
+    fuhrparkMarkVehicleStandort($standort);
+
+    $vehicle = fuhrparkStatisticsVehicle($standort, 'DO-HW 600');
+    $booker = User::factory()->create();
+    $driver = User::factory()->create();
+
+    $day = now()->startOfMonth()->addDay();
+
+    while (! in_array($day->isoWeekday(), [1, 2, 3, 4, 5], true)) {
+        $day = $day->addDay();
+    }
+
+    Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'user_id' => $booker->id,
+        'driver_id' => $driver->id,
+        'starts_at' => $day->copy()->setTime(22, 0),
+        'ends_at' => $day->copy()->addDay()->setTime(6, 0),
+    ]);
+
+    Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'user_id' => $booker->id,
+        'driver_id' => $driver->id,
+        'starts_at' => $day->copy()->setTime(9, 0),
+        'ends_at' => $day->copy()->setTime(11, 0),
+    ]);
+
+    $utilization = app(FuhrparkAdminStatisticsService::class)->collect('month')['utilization'];
+
+    expect($utilization['booked_vehicle_hours'])->toBe(2.0)
+        ->and($utilization['business_hours_label'])->toBe('07:00–18:00 (Mo–Fr)');
+});
+
 test('admin statistics component renders key metrics', function (): void {
     Volt::test('apps.fuhrpark.admin.statistics')
         ->assertSee('Fuhrpark-Statistik')
+        ->call('loadStatistics')
         ->assertSee('Gefahrene Kilometer')
         ->assertSee('Meiste Kilometer (Fahrzeug)')
+        ->assertSee('Flottenauslastung')
         ->assertSee('Elektro-Strecke')
         ->assertSee('Verbrenner-Strecke');
 });
