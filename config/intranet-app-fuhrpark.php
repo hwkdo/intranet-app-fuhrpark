@@ -15,6 +15,7 @@ return [
     ],
 
     'utilization' => [
+        /** Fallback, wenn AppSettings noch nicht synchronisiert sind */
         'business_hour_start' => 7,
         'business_hour_end' => 18,
         /** @var list<int> ISO weekday: 1 = Monday … 7 = Sunday */

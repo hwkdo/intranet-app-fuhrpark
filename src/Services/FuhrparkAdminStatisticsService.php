@@ -8,6 +8,7 @@ use Carbon\CarbonInterface;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\Handout;
+use Hwkdo\IntranetAppFuhrpark\Models\IntranetAppFuhrparkSettings;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
@@ -265,14 +266,51 @@ class FuhrparkAdminStatisticsService
      */
     private function businessHoursConfig(): array
     {
+        $settings = IntranetAppFuhrparkSettings::current()?->settings;
+
+        $start = $settings?->utilizationBusinessHourStart
+            ?? (int) config('intranet-app-fuhrpark.utilization.business_hour_start', 7);
+        $end = $settings?->utilizationBusinessHourEnd
+            ?? (int) config('intranet-app-fuhrpark.utilization.business_hour_end', 18);
+
         /** @var list<int> $days */
-        $days = config('intranet-app-fuhrpark.utilization.business_days', [1, 2, 3, 4, 5]);
+        $days = $settings !== null
+            ? $this->normalizeBusinessDays($settings->utilizationBusinessDays)
+            : $this->normalizeBusinessDays(config('intranet-app-fuhrpark.utilization.business_days', [1, 2, 3, 4, 5]));
+
+        $start = max(0, min(23, $start));
+        $end = max(0, min(23, $end));
+
+        if ($end <= $start) {
+            $end = min(23, $start + 1);
+        }
 
         return [
-            'start' => (int) config('intranet-app-fuhrpark.utilization.business_hour_start', 7),
-            'end' => (int) config('intranet-app-fuhrpark.utilization.business_hour_end', 18),
+            'start' => $start,
+            'end' => $end,
             'days' => $days,
         ];
+    }
+
+    /**
+     * @param  array<int, mixed>|null  $days
+     * @return list<int>
+     */
+    private function normalizeBusinessDays(?array $days): array
+    {
+        if ($days === null || $days === []) {
+            return [1, 2, 3, 4, 5];
+        }
+
+        $normalized = collect($days)
+            ->map(fn (mixed $day): int => (int) $day)
+            ->filter(fn (int $day): bool => $day >= 1 && $day <= 7)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return $normalized !== [] ? $normalized : [1, 2, 3, 4, 5];
     }
 
     private function businessHoursLabel(): string

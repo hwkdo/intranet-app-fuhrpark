@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 use App\Models\Standort;
 use App\Models\User;
+use Hwkdo\IntranetAppFuhrpark\Data\AppSettings;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\Handout;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
+use Hwkdo\IntranetAppFuhrpark\Models\IntranetAppFuhrparkSettings;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
 use Hwkdo\IntranetAppFuhrpark\Services\FuhrparkAdminStatisticsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -295,6 +297,25 @@ test('admin statistics ignores overnight hours for fleet utilization', function 
 
     expect($utilization['booked_vehicle_hours'])->toBe(2.0)
         ->and($utilization['business_hours_label'])->toBe('07:00–18:00 (Mo–Fr)');
+});
+
+test('admin statistics uses configurable business hours from app settings', function (): void {
+    $settingsRow = IntranetAppFuhrparkSettings::query()->firstOrCreate(
+        ['version' => 1],
+        ['settings' => new AppSettings],
+    );
+
+    $settingsRow->update([
+        'settings' => new AppSettings(
+            utilizationBusinessHourStart: 8,
+            utilizationBusinessHourEnd: 16,
+            utilizationBusinessDays: [1, 2, 3, 4, 5],
+        ),
+    ]);
+
+    $utilization = app(FuhrparkAdminStatisticsService::class)->collect('month')['utilization'];
+
+    expect($utilization['business_hours_label'])->toBe('08:00–16:00 (Mo–Fr)');
 });
 
 test('admin statistics component renders key metrics', function (): void {
