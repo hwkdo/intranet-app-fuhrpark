@@ -1,8 +1,6 @@
 <?php
 
-use Hwkdo\IntranetAppFuhrpark\Models\Booking;
-use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
-use function Livewire\Volt\{computed, mount, state, title};
+use function Livewire\Volt\{mount, state, title};
 
 title('Fuhrpark - Admin');
 
@@ -23,14 +21,6 @@ mount(function (): void {
     ], true)) {
         $this->activeTab = $tab;
     }
-});
-
-$stats = computed(function (): array {
-    return [
-        'vehicles' => Vehicle::query()->where('active', true)->count(),
-        'bookings_month' => Booking::query()->where('starts_at', '>=', now()->startOfMonth())->count(),
-        'bookings_open' => Booking::query()->where('ends_at', '>=', now())->count(),
-    ];
 });
 
 ?>
@@ -109,20 +99,11 @@ $stats = computed(function (): array {
         </flux:tab.panel>
 
         <flux:tab.panel name="statistiken">
-            <div class="grid gap-4 md:grid-cols-3">
-                <flux:card>
-                    <flux:heading size="md">Aktive Fahrzeuge</flux:heading>
-                    <flux:text size="xl" class="mt-2">{{ $this->stats['vehicles'] }}</flux:text>
-                </flux:card>
-                <flux:card>
-                    <flux:heading size="md">Buchungen (Monat)</flux:heading>
-                    <flux:text size="xl" class="mt-2">{{ $this->stats['bookings_month'] }}</flux:text>
-                </flux:card>
-                <flux:card>
-                    <flux:heading size="md">Offene Buchungen</flux:heading>
-                    <flux:text size="xl" class="mt-2">{{ $this->stats['bookings_open'] }}</flux:text>
-                </flux:card>
-            </div>
+            @if ($activeTab === 'statistiken')
+                <div class="min-h-[400px]">
+                    <livewire:apps.fuhrpark.admin.statistics />
+                </div>
+            @endif
         </flux:tab.panel>
     </flux:tab.group>
 </x-intranet-app-fuhrpark::fuhrpark-layout>
