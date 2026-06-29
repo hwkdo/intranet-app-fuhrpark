@@ -325,6 +325,7 @@ test('admin statistics component renders key metrics', function (): void {
         ->assertSee('Gefahrene Kilometer')
         ->assertSee('Meiste Kilometer (Fahrzeug)')
         ->assertSee('Flottenauslastung')
+        ->assertSee('Nicht erfüllte Buchungsanfragen')
         ->assertSee('Elektro-Strecke')
         ->assertSee('Verbrenner-Strecke');
 });

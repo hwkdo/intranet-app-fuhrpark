@@ -8,9 +8,12 @@ use Carbon\Carbon;
 use Flux\Flux;
 use Hwkdo\IntranetAppFuhrpark\Data\AvailabilityResult;
 use Hwkdo\IntranetAppFuhrpark\Data\BookingStoreData;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandReason;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandSource;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingAvailabilityService;
+use Hwkdo\IntranetAppFuhrpark\Services\BookingDemandEventService;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingService;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingStatusResolver;
 use Hwkdo\IntranetAppFuhrpark\Services\DriverLicenseService;
@@ -464,6 +467,22 @@ class Calendar extends Component
             ->contains(fn ($option): bool => $option->category->id === (int) $this->bookCategoryId && $option->isAvailable);
 
         if (! $categoryAvailable) {
+            $hadAlternative = app(VehicleAvailabilityService::class)
+                ->categoryBookingOptions($start, $end, $standortId, electricRouteKm: $this->bookElectricRouteKm)
+                ->contains(fn ($option): bool => $option->isAvailable && $option->category->id !== (int) $this->bookCategoryId);
+
+            app(BookingDemandEventService::class)->record(
+                userId: (int) Auth::id(),
+                startsAt: $start,
+                endsAt: $end,
+                reason: BookingDemandReason::NoVehicleInCategory,
+                source: BookingDemandSource::Create,
+                standortId: $standortId,
+                vehicleCategoryId: (int) $this->bookCategoryId,
+                driverId: (int) $this->bookDriverId,
+                hadAlternativeCategory: $hadAlternative,
+            );
+
             throw ValidationException::withMessages([
                 'bookCategoryId' => ['Diese Kategorie ist im gewählten Zeitraum ausgebucht.'],
             ]);
@@ -535,6 +554,52 @@ class Calendar extends Component
         } elseif ($result->hasSameCategoryAlternatives()) {
             $this->rescheduleCategoryId = $booking->vehicle->vehicle_category_id;
         }
+
+        if ($result->noneAvailable) {
+            app(BookingDemandEventService::class)->record(
+                userId: (int) Auth::id(),
+                startsAt: $start,
+                endsAt: $end,
+                reason: BookingDemandReason::RescheduleUnavailable,
+                source: BookingDemandSource::Reschedule,
+                standortId: $booking->vehicle->standort_id,
+                vehicleCategoryId: $booking->vehicle->vehicle_category_id,
+                driverId: (int) $booking->driver_id,
+            );
+        }
+    }
+
+    public function updated(mixed $property): void
+    {
+        if (! in_array($property, [
+            'bookStartDate',
+            'bookEndDate',
+            'bookStartTime',
+            'bookEndTime',
+            'bookStandortId',
+        ], true)) {
+            return;
+        }
+
+        if (! $this->showBookModal || ! $this->bookStandortId || ! $this->hasValidBookPeriod()) {
+            return;
+        }
+
+        if ($this->hasAvailableBookCategory()) {
+            return;
+        }
+
+        [$start, $end] = $this->validatedBookPeriod();
+
+        app(BookingDemandEventService::class)->record(
+            userId: (int) Auth::id(),
+            startsAt: $start,
+            endsAt: $end,
+            reason: BookingDemandReason::AllCategoriesUnavailable,
+            source: BookingDemandSource::Preview,
+            standortId: $this->bookStandortId,
+            driverId: $this->bookDriverId,
+        );
     }
 
     public function confirmReschedule(): void

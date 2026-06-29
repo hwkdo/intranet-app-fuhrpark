@@ -184,6 +184,93 @@ updated([
                 @endif
             </flux:card>
 
+            @php
+                $unmetDemand = $statistics['unmet_demand'];
+            @endphp
+
+            <flux:card class="space-y-4">
+                <div>
+                    <flux:heading size="md">Nicht erfüllte Buchungsanfragen</flux:heading>
+                    <flux:text class="mt-1 text-zinc-500">
+                        Erfasste Versuche ohne verfügbares Fahrzeug im gewünschten Zeitraum (Buchung, Umbuchung, Kalender-Vorschau).
+                    </flux:text>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <flux:card class="flex flex-col gap-1 border-0 shadow-none ring-1 ring-zinc-200 dark:ring-zinc-700">
+                        <flux:text size="sm" class="text-zinc-500">Erfasste Anfragen</flux:text>
+                        <div class="text-3xl font-bold">{{ number_format($unmetDemand['total_events'], 0, ',', '.') }}</div>
+                        <flux:text size="sm" class="text-zinc-500">
+                            {{ number_format($unmetDemand['successful_bookings'], 0, ',', '.') }} erfolgreiche Buchungen
+                        </flux:text>
+                    </flux:card>
+
+                    <flux:card class="flex flex-col gap-1 border-0 shadow-none ring-1 ring-zinc-200 dark:ring-zinc-700">
+                        <flux:text size="sm" class="text-zinc-500">Echter Engpass</flux:text>
+                        <div class="text-3xl font-bold">{{ number_format($unmetDemand['hard_shortage_events'], 0, ',', '.') }}</div>
+                        <flux:text size="sm" class="text-zinc-500">ohne alternative Kategorie</flux:text>
+                    </flux:card>
+
+                    <flux:card class="flex flex-col gap-1 border-0 shadow-none ring-1 ring-zinc-200 dark:ring-zinc-700">
+                        <flux:text size="sm" class="text-zinc-500">Nur Wunschkategorie voll</flux:text>
+                        <div class="text-3xl font-bold">{{ number_format($unmetDemand['with_alternative_category'], 0, ',', '.') }}</div>
+                        <flux:text size="sm" class="text-zinc-500">andere Kategorien wären frei gewesen</flux:text>
+                    </flux:card>
+
+                    <flux:card class="flex flex-col gap-1 border-0 shadow-none ring-1 ring-zinc-200 dark:ring-zinc-700">
+                        <flux:text size="sm" class="text-zinc-500">Anteil nicht erfüllt</flux:text>
+                        <div class="text-3xl font-bold">{{ number_format($unmetDemand['denial_rate_percent'], 1, ',', '.') }} %</div>
+                        <flux:text size="sm" class="text-zinc-500">Anfragen ÷ (Anfragen + Buchungen)</flux:text>
+                    </flux:card>
+                </div>
+
+                @if ($unmetDemand['total_events'] > 0)
+                    <div class="grid gap-4 xl:grid-cols-2">
+                        @if (count($unmetDemand['by_category']) > 0)
+                            <div class="space-y-3">
+                                <flux:heading size="sm">Top Kategorien</flux:heading>
+                                <flux:table>
+                                    <flux:table.columns>
+                                        <flux:table.column>Kategorie</flux:table.column>
+                                        <flux:table.column>Anfragen</flux:table.column>
+                                    </flux:table.columns>
+                                    <flux:table.rows>
+                                        @foreach ($unmetDemand['by_category'] as $row)
+                                            <flux:table.row>
+                                                <flux:table.cell>{{ $row['category'] }}</flux:table.cell>
+                                                <flux:table.cell>{{ $row['count'] }}</flux:table.cell>
+                                            </flux:table.row>
+                                        @endforeach
+                                    </flux:table.rows>
+                                </flux:table>
+                            </div>
+                        @endif
+
+                        @if (count($unmetDemand['by_standort']) > 0)
+                            <div class="space-y-3">
+                                <flux:heading size="sm">Top Standorte</flux:heading>
+                                <flux:table>
+                                    <flux:table.columns>
+                                        <flux:table.column>Standort</flux:table.column>
+                                        <flux:table.column>Anfragen</flux:table.column>
+                                    </flux:table.columns>
+                                    <flux:table.rows>
+                                        @foreach ($unmetDemand['by_standort'] as $row)
+                                            <flux:table.row>
+                                                <flux:table.cell>{{ $row['standort'] }}</flux:table.cell>
+                                                <flux:table.cell>{{ $row['count'] }}</flux:table.cell>
+                                            </flux:table.row>
+                                        @endforeach
+                                    </flux:table.rows>
+                                </flux:table>
+                            </div>
+                        @endif
+                    </div>
+                @else
+                    <flux:text class="text-zinc-500">Im gewählten Zeitraum wurden noch keine nicht erfüllten Anfragen erfasst.</flux:text>
+                @endif
+            </flux:card>
+
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <flux:card class="flex flex-col gap-1">
                     <flux:text size="sm" class="text-zinc-500">Gefahrene Kilometer</flux:text>

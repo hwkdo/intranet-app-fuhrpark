@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppFuhrpark\Services;
 
 use Carbon\CarbonInterface;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandReason;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandSource;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
+use Hwkdo\IntranetAppFuhrpark\Models\BookingDemandEvent;
 use Hwkdo\IntranetAppFuhrpark\Models\Handout;
 use Hwkdo\IntranetAppFuhrpark\Models\IntranetAppFuhrparkSettings;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
+use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
 use Illuminate\Database\Eloquent\Builder;
@@ -94,6 +98,118 @@ class FuhrparkAdminStatisticsService
             'top_drivers_by_km' => $this->topDriversByKm($from, $to, limit: 5),
             'bookings_by_purpose' => $this->bookingsByPurpose($from, $to),
             'utilization' => $this->collectUtilization($from, $to),
+            'unmet_demand' => $this->collectUnmetDemand($from, $to),
+        ];
+    }
+
+    /**
+     * @return array{
+     *     total_events: int,
+     *     hard_shortage_events: int,
+     *     with_alternative_category: int,
+     *     successful_bookings: int,
+     *     denial_rate_percent: float,
+     *     by_source: list<array{source: string, label: string, count: int}>,
+     *     by_reason: list<array{reason: string, label: string, count: int}>,
+     *     by_category: list<array{category: string, count: int}>,
+     *     by_standort: list<array{standort: string, count: int}>,
+     * }
+     */
+    private function collectUnmetDemand(?CarbonInterface $from, ?CarbonInterface $to): array
+    {
+        $eventsQuery = BookingDemandEvent::query()
+            ->when($from !== null, fn (Builder $query): Builder => $query->where('created_at', '>=', $from))
+            ->when($to !== null, fn (Builder $query): Builder => $query->where('created_at', '<=', $to));
+
+        $totalEvents = (clone $eventsQuery)->count();
+        $hardShortageEvents = (clone $eventsQuery)->where('had_alternative_category', false)->count();
+        $withAlternativeCategory = (clone $eventsQuery)->where('had_alternative_category', true)->count();
+        $successfulBookings = (clone $this->tripBookingsQuery($from, $to))->count();
+
+        $denialRatePercent = ($totalEvents + $successfulBookings) > 0
+            ? round(($totalEvents / ($totalEvents + $successfulBookings)) * 100, 1)
+            : 0.0;
+
+        $bySource = (clone $eventsQuery)
+            ->toBase()
+            ->select('source', DB::raw('COUNT(*) as event_count'))
+            ->groupBy('source')
+            ->orderByDesc('event_count')
+            ->get()
+            ->map(fn ($row): array => [
+                'source' => (string) $row->source,
+                'label' => BookingDemandSource::from((string) $row->source)->label(),
+                'count' => (int) $row->event_count,
+            ])
+            ->values()
+            ->all();
+
+        $byReason = (clone $eventsQuery)
+            ->toBase()
+            ->select('reason', DB::raw('COUNT(*) as event_count'))
+            ->groupBy('reason')
+            ->orderByDesc('event_count')
+            ->get()
+            ->map(fn ($row): array => [
+                'reason' => (string) $row->reason,
+                'label' => BookingDemandReason::from((string) $row->reason)->label(),
+                'count' => (int) $row->event_count,
+            ])
+            ->values()
+            ->all();
+
+        $categoryCounts = (clone $eventsQuery)
+            ->whereNotNull('vehicle_category_id')
+            ->toBase()
+            ->select('vehicle_category_id', DB::raw('COUNT(*) as event_count'))
+            ->groupBy('vehicle_category_id')
+            ->orderByDesc('event_count')
+            ->limit(5)
+            ->pluck('event_count', 'vehicle_category_id');
+
+        $categoryNames = VehicleCategory::query()
+            ->whereIn('id', $categoryCounts->keys())
+            ->pluck('name', 'id');
+
+        $byCategory = $categoryCounts
+            ->map(fn (int|string $count, int|string $categoryId): array => [
+                'category' => $categoryNames->get((int) $categoryId, 'Unbekannt'),
+                'count' => (int) $count,
+            ])
+            ->values()
+            ->all();
+
+        $standortCounts = (clone $eventsQuery)
+            ->whereNotNull('standort_id')
+            ->toBase()
+            ->select('standort_id', DB::raw('COUNT(*) as event_count'))
+            ->groupBy('standort_id')
+            ->orderByDesc('event_count')
+            ->limit(5)
+            ->pluck('event_count', 'standort_id');
+
+        $standortNames = FuhrparkModels::standort()::query()
+            ->whereIn('id', $standortCounts->keys())
+            ->pluck('name', 'id');
+
+        $byStandort = $standortCounts
+            ->map(fn (int|string $count, int|string $standortId): array => [
+                'standort' => $standortNames->get((int) $standortId, 'Unbekannt'),
+                'count' => (int) $count,
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'total_events' => $totalEvents,
+            'hard_shortage_events' => $hardShortageEvents,
+            'with_alternative_category' => $withAlternativeCategory,
+            'successful_bookings' => $successfulBookings,
+            'denial_rate_percent' => $denialRatePercent,
+            'by_source' => $bySource,
+            'by_reason' => $byReason,
+            'by_category' => $byCategory,
+            'by_standort' => $byStandort,
         ];
     }
 

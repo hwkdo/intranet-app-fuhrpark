@@ -7,6 +7,8 @@ namespace Hwkdo\IntranetAppFuhrpark\Services;
 use Carbon\CarbonInterface;
 use Hwkdo\IntranetAppFuhrpark\Contracts\BookingCalendarSyncInterface;
 use Hwkdo\IntranetAppFuhrpark\Data\BookingStoreData;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandReason;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandSource;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
 use Hwkdo\IntranetAppFuhrpark\Events\FuhrparkBookingChanged;
 use Hwkdo\IntranetAppFuhrpark\Mail\BookingCancelledAdminMail;
@@ -31,6 +33,7 @@ class BookingService
         private readonly BookingStatusResolver $statusResolver,
         private readonly ElectricVehicleService $electricVehicleService,
         private readonly BookingCalendarSyncInterface $calendarSync,
+        private readonly BookingDemandEventService $demandEventService,
     ) {}
 
     /**
@@ -94,7 +97,7 @@ class BookingService
     public function create(BookingStoreData $data, Authenticatable $booker, BookingPurpose $purpose = BookingPurpose::Normal): Booking
     {
         $driver = FuhrparkModels::user()::query()->findOrFail($data->driverId);
-        $vehicle = $this->resolveVehicle($data);
+        $vehicle = $this->resolveVehicle($data, booker: $booker);
 
         if ($vehicle->isElectric() && $purpose === BookingPurpose::Normal && ! $data->electricRouteKm) {
             throw ValidationException::withMessages([
@@ -170,6 +173,17 @@ class BookingService
         );
 
         if (! $vehicle) {
+            $this->demandEventService->record(
+                userId: (int) $booking->user_id,
+                startsAt: $start,
+                endsAt: $end,
+                reason: BookingDemandReason::RescheduleUnavailable,
+                source: BookingDemandSource::Reschedule,
+                standortId: $booking->vehicle->standort_id,
+                vehicleCategoryId: $categoryId,
+                driverId: (int) $booking->driver_id,
+            );
+
             throw ValidationException::withMessages([
                 'vehicle_category_id' => ['In dieser Kategorie ist kein Fahrzeug im gewählten Zeitraum verfügbar.'],
             ]);
@@ -270,13 +284,27 @@ class BookingService
         }
 
         if (! $this->availabilityService->isAvailable($vehicle, $start, $end, $excludeBookingIds, $electricRouteKm)) {
+            if ($booker !== null) {
+                $this->demandEventService->record(
+                    userId: (int) $booker->getAuthIdentifier(),
+                    startsAt: $start,
+                    endsAt: $end,
+                    reason: BookingDemandReason::VehicleUnavailable,
+                    source: BookingDemandSource::Create,
+                    standortId: $vehicle->standort_id,
+                    vehicleCategoryId: $vehicle->vehicle_category_id,
+                    vehicleId: $vehicle->id,
+                    driverId: (int) $driver->getKey(),
+                );
+            }
+
             throw ValidationException::withMessages([
                 'vehicle_id' => ['Fahrzeug im gewünschten Zeitraum nicht verfügbar.'],
             ]);
         }
     }
 
-    private function resolveVehicle(BookingStoreData $data, array $excludeBookingIds = []): Vehicle
+    private function resolveVehicle(BookingStoreData $data, array $excludeBookingIds = [], ?Authenticatable $booker = null): Vehicle
     {
         if ($data->vehicleId) {
             return Vehicle::query()->with('category')->findOrFail($data->vehicleId);
@@ -298,6 +326,24 @@ class BookingService
         );
 
         if (! $vehicle) {
+            if ($booker !== null) {
+                $hadAlternative = $this->availabilityService
+                    ->categoryBookingOptions($data->startsAt, $data->endsAt, $data->standortId, electricRouteKm: $data->electricRouteKm)
+                    ->contains(fn ($option): bool => $option->isAvailable);
+
+                $this->demandEventService->record(
+                    userId: (int) $booker->getAuthIdentifier(),
+                    startsAt: $data->startsAt,
+                    endsAt: $data->endsAt,
+                    reason: BookingDemandReason::NoVehicleInCategory,
+                    source: BookingDemandSource::Create,
+                    standortId: $data->standortId,
+                    vehicleCategoryId: $data->vehicleCategoryId,
+                    driverId: $data->driverId,
+                    hadAlternativeCategory: $hadAlternative,
+                );
+            }
+
             throw ValidationException::withMessages([
                 'vehicle_category_id' => ['In dieser Kategorie ist kein Fahrzeug im gewählten Zeitraum verfügbar.'],
             ]);
