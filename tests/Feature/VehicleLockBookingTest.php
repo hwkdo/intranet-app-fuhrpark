@@ -14,6 +14,7 @@ use Hwkdo\IntranetAppFuhrpark\Models\Handout;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingService;
+use Hwkdo\IntranetAppFuhrpark\Services\LogbookService;
 use Hwkdo\IntranetAppFuhrpark\Services\VehicleAdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -349,3 +350,32 @@ test('vehicle availability update rejects conflicting bookings', function (): vo
 
     app(VehicleAdminService::class)->updateAvailability($vehicle, $availableFrom, null);
 })->throws(ValidationException::class);
+
+test('active workshop booking is detected only while trip is running', function (): void {
+    $admin = User::factory()->create();
+    $driver = User::factory()->create();
+    fuhrparkGrantValidLicense($driver);
+    $vehicle = vehicleLockVehicle();
+    $service = app(VehicleAdminService::class);
+
+    expect($service->activeWorkshopBooking($vehicle))->toBeNull();
+
+    $running = app(LogbookService::class)->createWorkshopTrip(
+        $vehicle,
+        $admin,
+        $driver->id,
+        now()->subHour(),
+        now()->addHour(),
+    );
+
+    $future = app(LogbookService::class)->createWorkshopTrip(
+        $vehicle,
+        $admin,
+        $driver->id,
+        now()->addDay(),
+        now()->addDay()->addHours(2),
+    );
+
+    expect($service->activeWorkshopBooking($vehicle->fresh())?->id)->toBe($running->id)
+        ->and($service->activeWorkshopBooking($vehicle->fresh())?->id)->not->toBe($future->id);
+});

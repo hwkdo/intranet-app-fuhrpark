@@ -1,6 +1,8 @@
 <?php
 
 use Flux\Flux;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
+use Hwkdo\IntranetAppFuhrpark\Enums\VehicleAdminDisplayStatus;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\VehicleAdminService;
@@ -19,8 +21,11 @@ state([
     'electricRangeKm' => null,
     'electricChargeMinutes' => null,
     'active' => true,
-    'showStatusModal' => false,
     'statusVehicleId' => null,
+    'showDeactivateModal' => false,
+    'showLockModal' => false,
+    'showWorkshopModal' => false,
+    'showAvailabilityModal' => false,
     'inactiveReason' => '',
     'lockStart' => '',
     'lockEnd' => '',
@@ -33,9 +38,48 @@ state([
     'workshopEnd' => '',
     'availableFrom' => '',
     'availableUntil' => '',
+    'showStatusFilters' => [
+        'available' => true,
+        'underway' => true,
+        'limited' => true,
+        'unavailable' => true,
+    ],
 ]);
 
-$vehicles = computed(fn () => Vehicle::query()->with(['category', 'standort'])->orderBy('license_plate')->get());
+$allVehicles = computed(fn () => Vehicle::query()
+    ->with(['category', 'standort'])
+    ->withCount([
+        'bookings as active_locks_count' => fn ($query) => $query
+            ->where('purpose', BookingPurpose::Lock)
+            ->where('ends_at', '>', now()),
+        'bookings as running_workshop_count' => fn ($query) => $query
+            ->where('purpose', BookingPurpose::Workshop)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>', now()),
+    ])
+    ->orderBy('license_plate')
+    ->get());
+
+$vehicles = computed(function () {
+    return $this->allVehicles
+        ->filter(function (Vehicle $vehicle): bool {
+            $status = $vehicle->adminDisplayStatus();
+
+            return (bool) ($this->showStatusFilters[$status->value] ?? true);
+        })
+        ->values();
+});
+
+$statusFilterCounts = computed(fn () => $this->allVehicles->countBy(
+    fn (Vehicle $vehicle): string => $vehicle->adminDisplayStatus()->value,
+));
+
+$activeStatusFilterCount = computed(fn () => collect($this->showStatusFilters)->filter()->count());
+
+$toggleStatusFilter = function (string $status): void {
+    $this->showStatusFilters[$status] = ! ($this->showStatusFilters[$status] ?? true);
+};
+
 $categories = computed(fn () => VehicleCategory::query()->orderBy('name')->get());
 $standorte = computed(fn () => FuhrparkModels::vehicleStandorte());
 
@@ -60,6 +104,16 @@ $activeLockBookings = computed(function () {
     }
 
     return app(VehicleAdminService::class)->activeLockBookings($vehicle);
+});
+
+$activeWorkshopBooking = computed(function () {
+    $vehicle = $this->statusVehicle;
+
+    if (! $vehicle) {
+        return null;
+    }
+
+    return app(VehicleAdminService::class)->activeWorkshopBooking($vehicle);
 });
 
 $availabilityConflictsRemaining = computed(function () {
@@ -126,6 +180,9 @@ on(['lock-conflict-resolved' => function () {
         $this->availabilityConflictsRemaining,
         $this->canConfirmAvailability,
         $this->activeLockBookings,
+        $this->activeWorkshopBooking,
+        $this->allVehicles,
+        $this->vehicles,
     );
 }]);
 
@@ -196,7 +253,7 @@ $save = function (): void {
     $this->showModal = false;
 };
 
-$openStatus = function (int $id): void {
+$prepareStatusVehicle = function (int $id): void {
     $vehicle = Vehicle::query()->findOrFail($id);
 
     $this->statusVehicleId = $id;
@@ -212,7 +269,28 @@ $openStatus = function (int $id): void {
     $this->workshopDriverId = null;
     $this->workshopStart = '';
     $this->workshopEnd = '';
-    $this->showStatusModal = true;
+
+    unset($this->statusVehicle, $this->activeLockBookings, $this->activeWorkshopBooking, $this->allVehicles, $this->vehicles);
+};
+
+$openDeactivateModal = function (int $id): void {
+    $this->prepareStatusVehicle($id);
+    $this->showDeactivateModal = true;
+};
+
+$openLockModal = function (int $id): void {
+    $this->prepareStatusVehicle($id);
+    $this->showLockModal = true;
+};
+
+$openWorkshopModal = function (int $id): void {
+    $this->prepareStatusVehicle($id);
+    $this->showWorkshopModal = true;
+};
+
+$openAvailabilityModal = function (int $id): void {
+    $this->prepareStatusVehicle($id);
+    $this->showAvailabilityModal = true;
 };
 
 $updatedAvailableFrom = function (): void {
@@ -256,6 +334,9 @@ $confirmSaveAvailability = function (): void {
     Flux::toast(text: 'Verfügbarkeit wurde gespeichert.', variant: 'success');
 
     $this->availabilityStep = 1;
+    $this->showAvailabilityModal = false;
+
+    unset($this->statusVehicle, $this->allVehicles, $this->vehicles);
 };
 
 $clearAvailability = function (): void {
@@ -268,6 +349,8 @@ $clearAvailability = function (): void {
     $this->availabilityStep = 1;
 
     Flux::toast(text: 'Verfügbarkeitsbeschränkung wurde entfernt.', variant: 'success');
+
+    unset($this->statusVehicle, $this->allVehicles, $this->vehicles);
 };
 
 $checkDeactivateConflicts = function (): void {
@@ -299,8 +382,9 @@ $confirmDeactivate = function (): void {
     Flux::toast(text: 'Fahrzeug wurde deaktiviert.', variant: 'success');
 
     $this->reset(['inactiveReason', 'deactivateStep']);
+    $this->showDeactivateModal = false;
 
-    unset($this->statusVehicle);
+    unset($this->statusVehicle, $this->allVehicles, $this->vehicles);
 };
 
 $reactivateVehicle = function (): void {
@@ -309,8 +393,9 @@ $reactivateVehicle = function (): void {
     app(VehicleAdminService::class)->activate($vehicle);
 
     $this->inactiveReason = '';
+    $this->showDeactivateModal = false;
 
-    unset($this->statusVehicle);
+    unset($this->statusVehicle, $this->allVehicles, $this->vehicles);
 
     Flux::toast(text: 'Fahrzeug wurde reaktiviert.', variant: 'success');
 };
@@ -322,7 +407,7 @@ $removeLock = function (int $bookingId): void {
 
     Flux::toast(text: 'Sperre wurde aufgehoben.', variant: 'success');
 
-    unset($this->activeLockBookings);
+    unset($this->activeLockBookings, $this->allVehicles, $this->vehicles);
 };
 
 $checkLockConflicts = function (): void {
@@ -364,7 +449,9 @@ $createLock = function (): void {
     Flux::toast(text: 'Fahrzeug wurde für den gewählten Zeitraum gesperrt.', variant: 'success');
 
     $this->reset(['lockStart', 'lockEnd', 'lockReason', 'lockStep']);
-    $this->showStatusModal = false;
+    $this->showLockModal = false;
+
+    unset($this->activeLockBookings, $this->allVehicles, $this->vehicles);
 };
 
 $createWorkshop = function (): void {
@@ -391,40 +478,140 @@ $createWorkshop = function (): void {
     Flux::toast(text: 'Werkstattfahrt wurde angelegt.', variant: 'success');
 
     $this->reset(['workshopDriverId', 'workshopStart', 'workshopEnd']);
-    $this->showStatusModal = false;
+    $this->showWorkshopModal = false;
+
+    unset($this->activeWorkshopBooking, $this->allVehicles, $this->vehicles);
 };
 
 ?>
 
 <div>
-    <flux:button wire:click="openCreate" class="mb-4">Neues Fahrzeug</flux:button>
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+        <flux:button wire:click="openCreate">Neues Fahrzeug</flux:button>
+
+        <flux:dropdown position="bottom" align="start">
+            <flux:button variant="ghost" icon="funnel" icon-trailing="chevron-down">
+                Statusfilter
+                @if ($this->activeStatusFilterCount < count(VehicleAdminDisplayStatus::cases()))
+                    <flux:badge size="sm" class="ms-1">{{ $this->activeStatusFilterCount }}/{{ count(VehicleAdminDisplayStatus::cases()) }}</flux:badge>
+                @endif
+            </flux:button>
+
+            <flux:menu>
+                @foreach (VehicleAdminDisplayStatus::cases() as $status)
+                    @php($isActive = $showStatusFilters[$status->value] ?? true)
+                    @php($count = $this->statusFilterCounts[$status->value] ?? 0)
+                    <flux:menu.item
+                        wire:click="toggleStatusFilter('{{ $status->value }}')"
+                        wire:key="status-filter-{{ $status->value }}"
+                        :icon="$isActive ? 'check-circle' : 'minus-circle'"
+                        @class([
+                            'opacity-60' => ! $isActive,
+                        ])
+                    >
+                        <span class="flex items-center gap-2">
+                            <span
+                                class="size-2 shrink-0 rounded-full {{ $status->filterDotClass() }} {{ ! $isActive ? 'opacity-40' : '' }}"
+                                aria-hidden="true"
+                            ></span>
+                            {{ $status->label() }} ({{ $count }})
+                        </span>
+                    </flux:menu.item>
+                @endforeach
+            </flux:menu>
+        </flux:dropdown>
+    </div>
 
     <flux:table>
         <flux:table.columns>
             <flux:table.column>Kennzeichen</flux:table.column>
             <flux:table.column>Kategorie</flux:table.column>
             <flux:table.column>Standort</flux:table.column>
-            <flux:table.column>Aktiv</flux:table.column>
+            <flux:table.column>Status</flux:table.column>
             <flux:table.column>Verfügbarkeit</flux:table.column>
             <flux:table.column></flux:table.column>
         </flux:table.columns>
         <flux:table.rows>
-            @foreach($this->vehicles as $vehicle)
-                <flux:table.row>
-                    <flux:table.cell>{{ $vehicle->license_plate }}</flux:table.cell>
+            @forelse($this->vehicles as $vehicle)
+                @php($displayStatus = $vehicle->adminDisplayStatus())
+                <flux:table.row wire:key="vehicle-row-{{ $vehicle->id }}" class="{{ $displayStatus->rowClass() }}">
+                    <flux:table.cell class="font-medium">{{ $vehicle->license_plate }}</flux:table.cell>
                     <flux:table.cell>{{ $vehicle->category->name }}</flux:table.cell>
                     <flux:table.cell>{{ $vehicle->standort->name ?? '-' }}</flux:table.cell>
-                    <flux:table.cell>{{ $vehicle->active ? 'Ja' : 'Nein' }}</flux:table.cell>
+                    <flux:table.cell>
+                        <flux:badge :color="$displayStatus->badgeColor()" size="sm">
+                            {{ $displayStatus->label() }}
+                        </flux:badge>
+                        @if (! $vehicle->active && $vehicle->inactive_reason)
+                            <flux:text class="mt-1 block text-xs text-zinc-500">{{ $vehicle->inactive_reason }}</flux:text>
+                        @endif
+                    </flux:table.cell>
                     <flux:table.cell>
                         @if ($vehicle->hasAvailabilityRestriction())
-                            <flux:badge variant="danger" size="sm">{{ $vehicle->availabilityLabel() }}</flux:badge>
+                            <flux:badge color="amber" size="sm">{{ $vehicle->availabilityLabel() }}</flux:badge>
                         @else
                             —
                         @endif
                     </flux:table.cell>
                     <flux:table.cell class="flex flex-wrap gap-2">
                         <flux:button size="sm" wire:click="openEdit({{ $vehicle->id }})">Bearbeiten</flux:button>
-                        <flux:button size="sm" wire:click="openStatus({{ $vehicle->id }})">Status</flux:button>
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:button
+                                size="sm"
+                                icon-trailing="chevron-down"
+                                :variant="$displayStatus->statusButtonVariant()"
+                                class="{{ $displayStatus->statusButtonClass() }}"
+                            >
+                                Status
+                            </flux:button>
+                            <flux:menu>
+                                <flux:menu.item
+                                    wire:click="openDeactivateModal({{ $vehicle->id }})"
+                                    variant="{{ $vehicle->adminStatusMenuIsUrgent('deactivate') ? 'danger' : 'default' }}"
+                                    @class([
+                                        'text-red-600! dark:text-red-400!' => $vehicle->adminStatusMenuIsUrgent('deactivate'),
+                                    ])
+                                    icon="{{ $vehicle->active ? 'x-circle' : 'check-circle' }}"
+                                >
+                                    {{ $vehicle->active ? 'Deaktivieren' : 'Aktivieren' }}
+                                </flux:menu.item>
+                                <flux:menu.item
+                                    wire:click="openLockModal({{ $vehicle->id }})"
+                                    variant="{{ $vehicle->adminStatusMenuIsUrgent('lock') ? 'danger' : 'default' }}"
+                                    @class([
+                                        'text-red-600! dark:text-red-400!' => $vehicle->adminStatusMenuIsUrgent('lock'),
+                                    ])
+                                    icon="{{ $vehicle->active_locks_count > 0 ? 'lock-open' : 'lock-closed' }}"
+                                >
+                                    {{ $vehicle->active_locks_count > 0 ? 'Entsperren' : 'Sperren' }}
+                                </flux:menu.item>
+                                <flux:menu.item
+                                    wire:click="openWorkshopModal({{ $vehicle->id }})"
+                                    variant="{{ $vehicle->adminStatusMenuIsUrgent('workshop') ? 'danger' : 'default' }}"
+                                    @class([
+                                        'text-red-600! dark:text-red-400!' => $vehicle->adminStatusMenuIsUrgent('workshop'),
+                                    ])
+                                    icon="wrench-screwdriver"
+                                >
+                                    @if ($vehicle->running_workshop_count > 0)
+                                        Werkstattfahrt (läuft)
+                                    @else
+                                        Werkstattfahrt
+                                    @endif
+                                </flux:menu.item>
+                                <flux:menu.item
+                                    wire:click="openAvailabilityModal({{ $vehicle->id }})"
+                                    variant="{{ $vehicle->adminStatusMenuIsUrgent('availability') ? 'danger' : 'default' }}"
+                                    @class([
+                                        'text-red-600! dark:text-red-400!' => $vehicle->adminStatusMenuIsUrgent('availability'),
+                                        'text-amber-700! dark:text-amber-300!' => ! $vehicle->adminStatusMenuIsUrgent('availability') && $vehicle->hasAvailabilityRestriction(),
+                                    ])
+                                    icon="calendar-days"
+                                >
+                                    {{ $vehicle->hasAvailabilityRestriction() ? 'Verfügbarkeit ändern' : 'Verfügbarkeit' }}
+                                </flux:menu.item>
+                            </flux:menu>
+                        </flux:dropdown>
                         <flux:button
                             size="sm"
                             variant="ghost"
@@ -435,7 +622,13 @@ $createWorkshop = function (): void {
                         </flux:button>
                     </flux:table.cell>
                 </flux:table.row>
-            @endforeach
+            @empty
+                <flux:table.row>
+                    <flux:table.cell colspan="6" class="text-center text-zinc-500">
+                        Keine Fahrzeuge für die gewählten Filter.
+                    </flux:table.cell>
+                </flux:table.row>
+            @endforelse
         </flux:table.rows>
     </flux:table>
 
@@ -469,199 +662,8 @@ $createWorkshop = function (): void {
         </div>
     </flux:modal>
 
-    <flux:modal wire:model="showStatusModal" class="md:w-xl">
-        <flux:heading size="lg">Fahrzeug-Status</flux:heading>
-        <div class="mt-4 space-y-6">
-            @if ($this->statusVehicle && ! $this->statusVehicle->active)
-                <flux:callout variant="warning">
-                    <flux:callout.heading>Fahrzeug deaktiviert</flux:callout.heading>
-                    <flux:callout.text>
-                        @if ($this->statusVehicle->inactive_reason)
-                            Grund: {{ $this->statusVehicle->inactive_reason }}
-                        @else
-                            Das Fahrzeug ist derzeit nicht aktiv.
-                        @endif
-                    </flux:callout.text>
-                </flux:callout>
-                <flux:button variant="primary" wire:click="reactivateVehicle">Reaktivieren</flux:button>
-            @else
-                <div>
-                    <flux:heading size="sm">Deaktivieren</flux:heading>
-
-                    @if ($deactivateStep === 1)
-                        <div class="mt-3 space-y-3">
-                            <flux:textarea wire:model="inactiveReason" label="Grund" />
-                            <flux:button variant="primary" wire:click="checkDeactivateConflicts">Prüfen</flux:button>
-                        </div>
-                    @else
-                        <div class="mt-3 space-y-4">
-                            <flux:text class="text-sm text-zinc-500">
-                                Grund: {{ $inactiveReason }}
-                            </flux:text>
-
-                            @include('intranet-app-fuhrpark::livewire.apps.fuhrpark.admin.partials.vehicle-status-booking-conflicts', [
-                                'bookings' => $this->deactivateConflictsRemaining,
-                                'vehicleId' => $statusVehicleId,
-                                'warningMessage' => 'Es bestehen noch '.$this->deactivateConflictsRemaining->count().' '
-                                    .($this->deactivateConflictsRemaining->count() === 1 ? 'Buchung' : 'Buchungen')
-                                    .' für dieses Fahrzeug. Bitte jede Buchung umbuchen oder löschen.',
-                                'emptyMessage' => 'Keine kollidierenden Buchungen. Das Fahrzeug kann deaktiviert werden.',
-                            ])
-
-                            <div class="flex flex-wrap gap-2">
-                                <flux:button variant="ghost" wire:click="resetDeactivateStep">Zurück</flux:button>
-                                @if ($this->canConfirmDeactivate)
-                                    <flux:button variant="danger" wire:click="confirmDeactivate">Deaktivieren</flux:button>
-                                @endif
-                            </div>
-                        </div>
-                    @endif
-                </div>
-            @endif
-
-            <div>
-                <flux:heading size="sm">Sperren</flux:heading>
-
-                @if ($this->activeLockBookings->isNotEmpty())
-                    <div class="mt-3 space-y-2">
-                        <flux:text class="text-sm text-zinc-500">Aktive Sperren</flux:text>
-                        @foreach ($this->activeLockBookings as $lockBooking)
-                            <div
-                                wire:key="active-lock-{{ $lockBooking->id }}"
-                                class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
-                            >
-                                <flux:text class="text-sm">
-                                    {{ $lockBooking->starts_at->format('d.m.Y H:i') }}
-                                    –
-                                    {{ $lockBooking->ends_at->format('d.m.Y H:i') }}
-                                    @if ($lockBooking->lock_reason)
-                                        · {{ $lockBooking->lock_reason }}
-                                    @endif
-                                </flux:text>
-                                <flux:button
-                                    size="sm"
-                                    variant="ghost"
-                                    wire:click="removeLock({{ $lockBooking->id }})"
-                                >
-                                    Aufheben
-                                </flux:button>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-
-                @if ($lockStep === 1)
-                    <div class="mt-3 space-y-3">
-                        <flux:input wire:model="lockStart" type="datetime-local" label="Sperre von" />
-                        <flux:input wire:model="lockEnd" type="datetime-local" label="Sperre bis" />
-                        <flux:input wire:model="lockReason" label="Sperrgrund" />
-                        <flux:button variant="primary" wire:click="checkLockConflicts">Prüfen</flux:button>
-                    </div>
-                @else
-                    <div class="mt-3 space-y-4">
-                        <flux:text class="text-sm text-zinc-500">
-                            Sperre von {{ \Carbon\Carbon::parse($lockStart)->format('d.m.Y H:i') }}
-                            bis {{ \Carbon\Carbon::parse($lockEnd)->format('d.m.Y H:i') }}
-                            · Grund: {{ $lockReason }}
-                        </flux:text>
-
-                        @include('intranet-app-fuhrpark::livewire.apps.fuhrpark.admin.partials.vehicle-status-booking-conflicts', [
-                            'bookings' => $this->lockConflictsRemaining,
-                            'vehicleId' => $statusVehicleId,
-                            'warningMessage' => 'Das Fahrzeug hat '.$this->lockConflictsRemaining->count().' '
-                                .($this->lockConflictsRemaining->count() === 1 ? 'Buchung' : 'Buchungen')
-                                .' im Sperrzeitraum. Bitte jede Buchung umbuchen oder löschen.',
-                            'emptyMessage' => 'Keine kollidierenden Buchungen. Das Fahrzeug kann gesperrt werden.',
-                        ])
-
-                        <div class="flex flex-wrap gap-2">
-                            <flux:button variant="ghost" wire:click="resetLockStep">Zurück</flux:button>
-                            @if ($this->canConfirmLock)
-                                <flux:button variant="danger" wire:click="createLock">Fahrzeug sperren</flux:button>
-                            @endif
-                        </div>
-                    </div>
-                @endif
-            </div>
-
-            <div>
-                <flux:heading size="sm">Werkstattfahrt</flux:heading>
-                <div class="mt-3 space-y-3">
-                    <flux:select
-                        wire:model="workshopDriverId"
-                        variant="listbox"
-                        searchable
-                        label="Fahrer"
-                        placeholder="Fahrer auswählen…"
-                    >
-                        @foreach ($this->workshopDrivers as $user)
-                            <flux:select.option value="{{ $user->id }}">{{ $user->name }}</flux:select.option>
-                        @endforeach
-                    </flux:select>
-                    <flux:input wire:model="workshopStart" type="datetime-local" label="Werkstatt von" />
-                    <flux:input wire:model="workshopEnd" type="datetime-local" label="Werkstatt bis" />
-                    <flux:button wire:click="createWorkshop">Werkstattfahrt anlegen</flux:button>
-                </div>
-            </div>
-
-            <div class="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-                <flux:heading size="sm">Verfügbarkeit</flux:heading>
-                <flux:text class="mt-1">Leer lassen = unbegrenzt verfügbar.</flux:text>
-
-                @if ($this->statusVehicle?->hasAvailabilityRestriction())
-                    <flux:callout variant="warning" class="mt-3">
-                        <flux:callout.text>
-                            Aktuelle Beschränkung: {{ $this->statusVehicle->availabilityLabel() }}
-                        </flux:callout.text>
-                    </flux:callout>
-                    <flux:button class="mt-2" variant="ghost" wire:click="clearAvailability">
-                        Beschränkung aufheben
-                    </flux:button>
-                @endif
-
-                @if ($availabilityStep === 1)
-                    <div class="mt-3 space-y-3">
-                        <flux:input wire:model.live="availableFrom" type="datetime-local" label="Verfügbar ab" />
-                        <flux:input wire:model.live="availableUntil" type="datetime-local" label="Verfügbar bis" />
-                        <flux:button variant="primary" wire:click="checkAvailabilityConflicts">Prüfen</flux:button>
-                    </div>
-                @else
-                    <div class="mt-3 space-y-4">
-                        <flux:text class="text-sm text-zinc-500">
-                            @if ($availableFrom !== '')
-                                Verfügbar ab {{ \Carbon\Carbon::parse($availableFrom)->format('d.m.Y H:i') }}
-                            @else
-                                Kein Startdatum
-                            @endif
-                            ·
-                            @if ($availableUntil !== '')
-                                bis {{ \Carbon\Carbon::parse($availableUntil)->format('d.m.Y H:i') }}
-                            @else
-                                unbegrenzt
-                            @endif
-                        </flux:text>
-
-                        @include('intranet-app-fuhrpark::livewire.apps.fuhrpark.admin.partials.vehicle-status-booking-conflicts', [
-                            'bookings' => $this->availabilityConflictsRemaining,
-                            'vehicleId' => $statusVehicleId,
-                            'warningMessage' => 'Im gewählten Verfügbarkeitszeitraum liegen '
-                                .$this->availabilityConflictsRemaining->count().' '
-                                .($this->availabilityConflictsRemaining->count() === 1 ? 'Buchung' : 'Buchungen')
-                                .' außerhalb der Freigabe. Bitte jede Buchung umbuchen oder löschen.',
-                            'emptyMessage' => 'Keine kollidierenden Buchungen. Die Verfügbarkeit kann gespeichert werden.',
-                        ])
-
-                        <div class="flex flex-wrap gap-2">
-                            <flux:button variant="ghost" wire:click="resetAvailabilityStep">Zurück</flux:button>
-                            @if ($this->canConfirmAvailability)
-                                <flux:button variant="primary" wire:click="confirmSaveAvailability">
-                                    Verfügbarkeit speichern
-                                </flux:button>
-                            @endif
-                        </div>
-                    </div>
-                @endif
-            </div>
-        </div>
-    </flux:modal>
+    @include('intranet-app-fuhrpark::livewire.apps.fuhrpark.admin.partials.vehicle-status-deactivate-modal')
+    @include('intranet-app-fuhrpark::livewire.apps.fuhrpark.admin.partials.vehicle-status-lock-modal')
+    @include('intranet-app-fuhrpark::livewire.apps.fuhrpark.admin.partials.vehicle-status-workshop-modal')
+    @include('intranet-app-fuhrpark::livewire.apps.fuhrpark.admin.partials.vehicle-status-availability-modal')
 </div>

@@ -133,6 +133,18 @@ class VehicleAdminService
             ->get();
     }
 
+    public function activeWorkshopBooking(Vehicle $vehicle): ?Booking
+    {
+        return Booking::query()
+            ->with('driver')
+            ->where('vehicle_id', $vehicle->id)
+            ->where('purpose', BookingPurpose::Workshop)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>', now())
+            ->orderBy('starts_at')
+            ->first();
+    }
+
     public function removeLockBooking(Vehicle $vehicle, int $bookingId): void
     {
         $booking = Booking::query()

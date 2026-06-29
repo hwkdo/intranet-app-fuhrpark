@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppFuhrpark\Models;
 
 use Hwkdo\IntranetAppFuhrpark\Database\Factories\VehicleFactory;
+use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
+use Hwkdo\IntranetAppFuhrpark\Enums\VehicleAdminDisplayStatus;
+use Hwkdo\IntranetAppFuhrpark\Enums\VehicleAdminUnavailabilityCause;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -102,6 +105,88 @@ class Vehicle extends Model
         }
 
         return implode(' · ', $parts);
+    }
+
+    public function adminUnavailabilityCause(): ?VehicleAdminUnavailabilityCause
+    {
+        $now = now();
+
+        if (! $this->active) {
+            return VehicleAdminUnavailabilityCause::Deactivated;
+        }
+
+        if ($this->available_from && $now < $this->available_from) {
+            return VehicleAdminUnavailabilityCause::AvailabilityWindow;
+        }
+
+        if ($this->available_until && $now > $this->available_until) {
+            return VehicleAdminUnavailabilityCause::AvailabilityWindow;
+        }
+
+        if ($this->hasActiveLockNow()) {
+            return VehicleAdminUnavailabilityCause::Lock;
+        }
+
+        if ($this->hasActiveWorkshopNow()) {
+            return VehicleAdminUnavailabilityCause::Workshop;
+        }
+
+        return null;
+    }
+
+    public function adminDisplayStatus(): VehicleAdminDisplayStatus
+    {
+        if ($this->adminUnavailabilityCause() !== null) {
+            return VehicleAdminDisplayStatus::Unavailable;
+        }
+
+        if ($this->hasRegularBookingNow()) {
+            return VehicleAdminDisplayStatus::Underway;
+        }
+
+        if ($this->hasAvailabilityRestriction() || (int) ($this->active_locks_count ?? 0) > 0) {
+            return VehicleAdminDisplayStatus::Limited;
+        }
+
+        return VehicleAdminDisplayStatus::Available;
+    }
+
+    public function adminStatusMenuIsUrgent(string $action): bool
+    {
+        $cause = $this->adminUnavailabilityCause();
+
+        if ($cause === null) {
+            return false;
+        }
+
+        return $cause->menuAction() === $action;
+    }
+
+    public function hasRegularBookingNow(): bool
+    {
+        return $this->bookings()
+            ->where('purpose', BookingPurpose::Normal)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>', now())
+            ->exists();
+    }
+
+    public function hasActiveLockNow(): bool
+    {
+        return $this->bookings()
+            ->where('purpose', BookingPurpose::Lock)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>', now())
+            ->exists();
+    }
+
+    public function hasActiveWorkshopNow(): bool
+    {
+        return $this->bookings()
+            ->where('purpose', BookingPurpose::Workshop)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>', now())
+            ->exists();
     }
 
     protected static function newFactory(): VehicleFactory
