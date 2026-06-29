@@ -12,7 +12,7 @@ $periodLabel = computed(function (): string {
     $now = now();
 
     return match ($this->period) {
-        'year' => 'Aktuelles Jahr ('.$now->year.')',
+        'year' => 'Aktuelles Jahr ('.$now->year.', bis '.$now->translatedFormat('d.m.').')',
         'all' => 'Gesamt',
         default => 'Aktueller Monat ('.$now->translatedFormat('F Y').')',
     };

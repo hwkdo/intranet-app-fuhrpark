@@ -605,8 +605,8 @@ class FuhrparkAdminStatisticsService
         return match ($period) {
             'year' => [
                 $now->copy()->startOfYear(),
-                $now->copy()->endOfYear(),
-                'Aktuelles Jahr ('.$now->year.')',
+                $now->copy(),
+                'Aktuelles Jahr ('.$now->year.', bis '.$now->translatedFormat('d.m.').')',
             ],
             'all' => [
                 null,
