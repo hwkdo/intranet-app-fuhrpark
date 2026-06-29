@@ -14,6 +14,7 @@ class Project extends Model
     protected $fillable = [
         'name',
         'active',
+        'legacy_id',
     ];
 
     protected function casts(): array

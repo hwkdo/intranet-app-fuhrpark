@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppFuhrpark;
 
 use Hwkdo\IntranetAppFuhrpark\Commands\ImportDriverLicensesCommand;
+use Hwkdo\IntranetAppFuhrpark\Commands\ImportLegacyFuhrparkCommand;
 use Hwkdo\IntranetAppFuhrpark\Contracts\BookingCalendarSyncInterface;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\DriverLicense;
@@ -31,6 +32,7 @@ class IntranetAppFuhrparkServiceProvider extends PackageServiceProvider
             ->hasConfigFile()
             ->hasViews()
             ->hasCommand(ImportDriverLicensesCommand::class)
+            ->hasCommand(ImportLegacyFuhrparkCommand::class)
             ->discoversMigrations();
     }
 

@@ -22,6 +22,7 @@ class LogbookEntry extends Model
         'fueled',
         'cleaned',
         'note',
+        'legacy_id',
     ];
 
     protected function casts(): array

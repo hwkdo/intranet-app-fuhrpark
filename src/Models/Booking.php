@@ -38,6 +38,7 @@ class Booking extends Model
         'km_end',
         'ms_graph_event_id',
         'sync_to_calendar',
+        'legacy_id',
     ];
 
     protected function casts(): array

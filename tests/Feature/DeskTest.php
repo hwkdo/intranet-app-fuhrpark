@@ -121,6 +121,43 @@ test('desk shows predecessor warning when handout is blocked', function (): void
         ->assertDontSee('Ausgabe bestätigen');
 });
 
+test('desk confirms return with signature', function (): void {
+    Carbon::setTestNow(Carbon::today()->setTime(10, 0));
+
+    $driver = User::factory()->create(['active' => true]);
+    $processor = User::factory()->create(['active' => true]);
+    $vehicle = fuhrparkDeskVehicle();
+
+    $booking = Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'starts_at' => now()->setTime(8, 0),
+        'ends_at' => now()->setTime(12, 0),
+        'km_start' => 1000,
+    ]);
+
+    Handout::query()->create([
+        'booking_id' => $booking->id,
+        'driver_id' => $driver->id,
+        'processed_by_user_id' => $processor->id,
+        'signature_data' => ['data' => 'handout-signed'],
+    ]);
+
+    Livewire::actingAs(fuhrparkDeskOperator())
+        ->test('apps.fuhrpark.desk')
+        ->call('openReturn', $booking->id)
+        ->set('returnKmEnd', 1050)
+        ->set('returnSignatureData', 'return-base64-signature')
+        ->call('confirmReturn')
+        ->assertHasNoErrors()
+        ->assertSet('showReturnModal', false);
+
+    $return = $booking->fresh('handout.returnRecord')->handout?->returnRecord;
+
+    expect($return)->not->toBeNull()
+        ->and($return->signature_data)->toBe(['data' => 'return-base64-signature']);
+});
+
 test('desk passes selected handout driver to handout service', function (): void {
     Carbon::setTestNow(Carbon::today()->setTime(10, 0));
 

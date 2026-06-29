@@ -39,6 +39,7 @@ class Vehicle extends Model
         'available_until',
         'electric_range_km',
         'electric_charge_minutes',
+        'legacy_id',
     ];
 
     protected function casts(): array

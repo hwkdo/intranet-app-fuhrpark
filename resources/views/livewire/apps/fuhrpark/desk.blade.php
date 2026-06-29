@@ -25,6 +25,7 @@ state([
         'fuel_card' => false,
     ],
     'signatureData' => null,
+    'returnSignatureData' => null,
     'showAllVehiclesOnRoad' => false,
 ]);
 
@@ -142,6 +143,7 @@ $openReturn = function (int $bookingId): void {
     $this->authorize('returnVehicle', $booking);
     $this->selectedBookingId = $bookingId;
     $this->returnKmEnd = $booking->km_start;
+    $this->returnSignatureData = null;
     $this->showReturnModal = true;
 };
 
@@ -186,7 +188,15 @@ $confirmReturn = function (): void {
         return;
     }
 
-    $this->validate(['returnKmEnd' => 'required|integer|min:0']);
+    $this->validate(
+        [
+            'returnKmEnd' => 'required|integer|min:0',
+            'returnSignatureData' => 'required|string',
+        ],
+        [
+            'returnSignatureData.required' => 'Bitte erfassen Sie zuerst eine Unterschrift.',
+        ],
+    );
 
     app(HandoutReturnService::class)->returnVehicle(
         $handout,
@@ -196,12 +206,20 @@ $confirmReturn = function (): void {
         $this->returnChecklist,
         $this->returnHasDamage,
         $this->returnDamageNote ?: null,
+        ['data' => $this->returnSignatureData],
     );
 
     $this->showReturnModal = false;
+    $this->returnSignatureData = null;
 };
 
 on(['signature-confirmed' => function (string $img_src, string $base64, array $checkboxes) {
+    if ($this->showReturnModal) {
+        $this->returnSignatureData = $base64;
+
+        return;
+    }
+
     $this->signatureData = $base64;
 }]);
 
@@ -396,7 +414,33 @@ on(['signature-confirmed' => function (string $img_src, string $base64, array $c
             @if($returnHasDamage)
                 <flux:textarea wire:model="returnDamageNote" label="Schadensbeschreibung" />
             @endif
-            <flux:button variant="primary" wire:click="confirmReturn">Rückgabe bestätigen</flux:button>
+
+            <div wire:key="return-signopad-{{ $selectedBookingId }}">
+                <livewire:signopad.signpad
+                    :fields="[]"
+                    text-oben="Fahrzeugrückgabe {{ $this->selectedBooking->vehicle->license_plate }}"
+                    text-unten="{{ $this->selectedBooking->driver->name ?? '' }}"
+                    :key="'return-signpad-'.$selectedBookingId"
+                />
+            </div>
+
+            @if ($returnSignatureData)
+                <flux:callout variant="success" icon="check-circle">
+                    Unterschrift erfasst. Sie können die Rückgabe jetzt bestätigen.
+                </flux:callout>
+            @else
+                <flux:text class="text-zinc-500">
+                    Bitte zuerst die Unterschrift am Signopad erfassen.
+                </flux:text>
+            @endif
+
+            <flux:button
+                variant="primary"
+                wire:click="confirmReturn"
+                :disabled="! $returnSignatureData"
+            >
+                Rückgabe bestätigen
+            </flux:button>
         </div>
         @endif
     </flux:modal>

@@ -18,6 +18,7 @@ class Handout extends Model
         'driver_id',
         'processed_by_user_id',
         'signature_data',
+        'legacy_id',
     ];
 
     protected function casts(): array

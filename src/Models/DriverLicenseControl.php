@@ -22,6 +22,7 @@ class DriverLicenseControl extends Model
         'note',
         'file_path',
         'file_name',
+        'legacy_id',
     ];
 
     public function driverLicense(): BelongsTo

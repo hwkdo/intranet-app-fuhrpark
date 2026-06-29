@@ -20,6 +20,8 @@ class VehicleReturn extends Model
         'checklist',
         'has_damage',
         'damage_note',
+        'signature_data',
+        'legacy_id',
     ];
 
     protected function casts(): array
@@ -27,6 +29,7 @@ class VehicleReturn extends Model
         return [
             'checklist' => 'array',
             'has_damage' => 'boolean',
+            'signature_data' => 'array',
         ];
     }
 

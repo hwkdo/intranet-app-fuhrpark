@@ -22,6 +22,7 @@ class VehicleCategory extends Model
         'is_electric',
         'electric_range_avg_km',
         'electric_charge_minutes_avg',
+        'legacy_id',
     ];
 
     protected function casts(): array

@@ -75,7 +75,14 @@ class HandoutReturnService
         array $checklist,
         bool $hasDamage,
         ?string $damageNote = null,
+        ?array $signatureData = null,
     ): VehicleReturn {
+        if (blank($signatureData['data'] ?? null)) {
+            throw ValidationException::withMessages([
+                'signature' => ['Bitte erfassen Sie zuerst eine Unterschrift.'],
+            ]);
+        }
+
         $return = VehicleReturn::query()->create([
             'handout_id' => $handout->id,
             'driver_id' => $driverId,
@@ -84,6 +91,7 @@ class HandoutReturnService
             'checklist' => $checklist,
             'has_damage' => $hasDamage,
             'damage_note' => $damageNote,
+            'signature_data' => $signatureData,
         ]);
 
         $booking = $handout->booking;

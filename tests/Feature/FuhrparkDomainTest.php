@@ -926,6 +926,43 @@ test('handout is blocked when predecessor has no return', function (): void {
     expect($service->canHandout($booking))->toBeFalse();
 });
 
+test('return requires signature', function (): void {
+    $processor = User::factory()->create();
+    $driver = User::factory()->create();
+    $vehicle = fuhrparkVehicle();
+    $booking = Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'starts_at' => now(),
+        'ends_at' => now()->addHours(4),
+    ]);
+
+    $handout = Handout::query()->create([
+        'booking_id' => $booking->id,
+        'driver_id' => $driver->id,
+        'processed_by_user_id' => $processor->id,
+        'signature_data' => ['data' => 'handout-signed'],
+    ]);
+
+    $service = app(HandoutReturnService::class);
+
+    expect(fn () => $service->returnVehicle($handout, $processor, $driver->id, 1050, [], false))
+        ->toThrow(ValidationException::class);
+
+    $return = $service->returnVehicle(
+        $handout,
+        $processor,
+        $driver->id,
+        1050,
+        ['key' => true],
+        false,
+        null,
+        ['data' => 'return-signature'],
+    );
+
+    expect($return->signature_data)->toBe(['data' => 'return-signature']);
+});
+
 test('handout requires signature', function (): void {
     $processor = User::factory()->create();
     $driver = User::factory()->create();

@@ -23,6 +23,7 @@ class DriverLicense extends Model
         'user_id',
         'valid_until',
         'restricted_until',
+        'legacy_id',
     ];
 
     protected function casts(): array
