@@ -9,6 +9,7 @@ use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppFuhrpark\Data\AppSettings;
 use Hwkdo\IntranetAppFuhrpark\Data\UserSettings;
+use Hwkdo\IntranetAppFuhrpark\Mcp\Servers\FuhrparkServer;
 use Hwkdo\IntranetAppFuhrpark\Tasks\DriverLicenseTaskProvider;
 use Hwkdo\IntranetAppFuhrpark\Tasks\MissingLogbookTaskProvider;
 use Hwkdo\IntranetAppFuhrpark\Tasks\NoShowBookingTaskProvider;
@@ -53,7 +54,12 @@ class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesTasksInterfac
 
     public static function mcpServers(): array
     {
-        return [];
+        return [
+            'fuhrpark' => [
+                'class' => FuhrparkServer::class,
+                'middleware' => ['auth:api'],
+            ],
+        ];
     }
 
     /**

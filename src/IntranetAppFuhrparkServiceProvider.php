@@ -80,6 +80,13 @@ class IntranetAppFuhrparkServiceProvider extends PackageServiceProvider
 
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         $this->loadRoutesFrom(__DIR__.'/../routes/channels.php');
+        $this->loadRoutesFrom(__DIR__.'/../routes/ai.php');
+
+        $relayConfig = require __DIR__.'/../config/relay.php';
+        $existingServers = config('relay.servers', []);
+        config([
+            'relay.servers' => array_merge($existingServers, $relayConfig['servers'] ?? []),
+        ]);
     }
 
     protected function registerFuhrparkGates(): void

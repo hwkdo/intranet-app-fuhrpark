@@ -9,6 +9,7 @@ use Livewire\Volt\Volt;
 Route::middleware(['web', 'auth', 'can:see-app-fuhrpark'])->group(function (): void {
     Route::livewire('apps/fuhrpark', Calendar::class)->name('apps.fuhrpark.index');
     Volt::route('apps/fuhrpark/meine', 'apps.fuhrpark.my-bookings')->name('apps.fuhrpark.meine');
+    Volt::route('apps/fuhrpark/chat', 'apps.fuhrpark.chat')->name('apps.fuhrpark.chat');
     Volt::route('apps/fuhrpark/info', 'apps.fuhrpark.info')->name('apps.fuhrpark.info');
     Volt::route('apps/fuhrpark/settings/user', 'apps.fuhrpark.settings.user')->name('apps.fuhrpark.settings.user');
 });
