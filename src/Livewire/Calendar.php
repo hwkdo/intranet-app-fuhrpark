@@ -5,14 +5,11 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppFuhrpark\Livewire;
 
 use Carbon\Carbon;
-use Flux\Flux;
-use Hwkdo\IntranetAppFuhrpark\Data\AvailabilityResult;
 use Hwkdo\IntranetAppFuhrpark\Data\BookingStoreData;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandReason;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandSource;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
-use Hwkdo\IntranetAppFuhrpark\Services\BookingAvailabilityService;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingDemandEventService;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingService;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingStatusResolver;
@@ -36,8 +33,6 @@ class Calendar extends Component
     public bool $showBookModal = false;
 
     public bool $showDetailModal = false;
-
-    public bool $showRescheduleModal = false;
 
     public ?int $selectedBookingId = null;
 
@@ -64,24 +59,6 @@ class Calendar extends Component
     public ?int $bookElectricRouteKm = null;
 
     public bool $bookElectricRangeAcknowledged = false;
-
-    public string $rescheduleStartDate = '';
-
-    public string $rescheduleEndDate = '';
-
-    public string $rescheduleStartTime = '08:00';
-
-    public string $rescheduleEndTime = '12:00';
-
-    public ?int $rescheduleVehicleId = null;
-
-    public ?int $rescheduleOtherCategoryId = null;
-
-    public ?int $rescheduleCategoryId = null;
-
-    public bool $reschedulePreferSameVehicle = true;
-
-    public bool $rescheduleChecked = false;
 
     public bool $showCancelModal = false;
 
@@ -175,46 +152,6 @@ class Calendar extends Component
             ->find($this->selectedBookingId);
     }
 
-    #[Computed]
-    public function rescheduleAvailability(): AvailabilityResult
-    {
-        if (! $this->showRescheduleModal || ! $this->selectedBookingId || ! $this->rescheduleChecked) {
-            return new AvailabilityResult(collect(), [], true);
-        }
-
-        $booking = $this->selectedBooking;
-        $start = $this->reschedulePeriodStart();
-        $end = $this->reschedulePeriodEnd();
-
-        if (! $booking || ! $start || ! $end || $end->lte($start)) {
-            return new AvailabilityResult(collect(), [], true);
-        }
-
-        return app(BookingAvailabilityService::class)->findAlternatives($booking, $start, $end);
-    }
-
-    #[Computed]
-    public function canSelectRescheduleVehicle(): bool
-    {
-        return Auth::user()?->can('manage-app-fuhrpark') ?? false;
-    }
-
-    #[Computed]
-    public function rescheduleOtherCategoryVehicles(): Collection
-    {
-        if (! $this->rescheduleOtherCategoryId) {
-            return collect();
-        }
-
-        foreach ($this->rescheduleAvailability->otherCategories as $group) {
-            if ($group->category->id === $this->rescheduleOtherCategoryId) {
-                return $group->vehicles;
-            }
-        }
-
-        return collect();
-    }
-
     public function updatedBookStartDate(): void
     {
         $this->resetBookElectricRangeAcknowledgement();
@@ -261,70 +198,6 @@ class Calendar extends Component
     private function resetBookElectricRangeAcknowledgement(): void
     {
         $this->bookElectricRangeAcknowledged = false;
-    }
-
-    public function updatedRescheduleStartDate(): void
-    {
-        $this->resetRescheduleCheck();
-
-        if ($this->rescheduleEndDate !== '' && $this->rescheduleEndDate < $this->rescheduleStartDate) {
-            $this->rescheduleEndDate = $this->rescheduleStartDate;
-        }
-    }
-
-    public function updatedRescheduleEndDate(): void
-    {
-        $this->resetRescheduleCheck();
-    }
-
-    public function updatedRescheduleStartTime(): void
-    {
-        $this->resetRescheduleCheck();
-    }
-
-    public function updatedRescheduleEndTime(): void
-    {
-        $this->resetRescheduleCheck();
-    }
-
-    public function updatedReschedulePreferSameVehicle(): void
-    {
-        if (! $this->rescheduleChecked) {
-            return;
-        }
-
-        $booking = $this->selectedBooking;
-        if (! $booking) {
-            return;
-        }
-
-        if ($this->reschedulePreferSameVehicle) {
-            $this->preselectRescheduleVehicle($this->rescheduleAvailability, $booking);
-        } else {
-            $this->rescheduleVehicleId = null;
-        }
-    }
-
-    public function selectRescheduleOtherCategory(int $categoryId): void
-    {
-        if ($this->canSelectRescheduleVehicle) {
-            $this->rescheduleOtherCategoryId = $categoryId;
-            $this->rescheduleCategoryId = $categoryId;
-            $this->rescheduleVehicleId = null;
-
-            return;
-        }
-
-        $this->rescheduleByCategoryForUser($categoryId);
-    }
-
-    public function selectRescheduleVehicle(int $vehicleId): void
-    {
-        $this->rescheduleVehicleId = $vehicleId;
-
-        if ($this->rescheduleAvailability->sameCategory->contains('id', $vehicleId)) {
-            $this->rescheduleOtherCategoryId = null;
-        }
     }
 
     /**
@@ -515,58 +388,8 @@ class Calendar extends Component
         }
 
         $this->authorize('update', $booking);
-
-        $this->rescheduleStartDate = $booking->starts_at->format('Y-m-d');
-        $this->rescheduleEndDate = $booking->ends_at->format('Y-m-d');
-        $this->rescheduleStartTime = $booking->starts_at->format('H:i');
-        $this->rescheduleEndTime = $booking->ends_at->format('H:i');
-        $this->rescheduleVehicleId = null;
-        $this->rescheduleOtherCategoryId = null;
-        $this->rescheduleCategoryId = null;
-        $this->reschedulePreferSameVehicle = true;
-        $this->rescheduleChecked = false;
         $this->showDetailModal = false;
-        $this->showRescheduleModal = true;
-    }
-
-    public function checkRescheduleAvailability(): void
-    {
-        $booking = $this->selectedBooking;
-        if (! $booking) {
-            return;
-        }
-
-        $this->authorize('update', $booking);
-
-        $this->validateRescheduleTimes();
-
-        [$start, $end] = $this->validatedReschedulePeriod();
-
-        $result = app(BookingAvailabilityService::class)->findAlternatives($booking, $start, $end);
-
-        $this->rescheduleChecked = true;
-        $this->rescheduleVehicleId = null;
-        $this->rescheduleOtherCategoryId = null;
-        $this->rescheduleCategoryId = null;
-
-        if ($this->canSelectRescheduleVehicle) {
-            $this->preselectRescheduleVehicle($result, $booking);
-        } elseif ($result->hasSameCategoryAlternatives()) {
-            $this->rescheduleCategoryId = $booking->vehicle->vehicle_category_id;
-        }
-
-        if ($result->noneAvailable) {
-            app(BookingDemandEventService::class)->record(
-                userId: (int) Auth::id(),
-                startsAt: $start,
-                endsAt: $end,
-                reason: BookingDemandReason::RescheduleUnavailable,
-                source: BookingDemandSource::Reschedule,
-                standortId: $booking->vehicle->standort_id,
-                vehicleCategoryId: $booking->vehicle->vehicle_category_id,
-                driverId: (int) $booking->driver_id,
-            );
-        }
+        $this->dispatch('open-booking-reschedule', bookingId: $booking->id);
     }
 
     public function updated(mixed $property): void
@@ -602,97 +425,6 @@ class Calendar extends Component
         );
     }
 
-    public function confirmReschedule(): void
-    {
-        $booking = $this->selectedBooking;
-        if (! $booking || ! $this->rescheduleChecked) {
-            return;
-        }
-
-        if (! $this->canSelectRescheduleVehicle) {
-            if (! $this->rescheduleCategoryId) {
-                return;
-            }
-
-            $this->rescheduleByCategoryForUser((int) $this->rescheduleCategoryId);
-
-            return;
-        }
-
-        if (! $this->rescheduleVehicleId) {
-            return;
-        }
-
-        $this->authorize('update', $booking);
-
-        $this->validateRescheduleTimes();
-
-        [$start, $end] = $this->validatedReschedulePeriod();
-
-        if (! $this->isRescheduleVehicleAllowed((int) $this->rescheduleVehicleId)) {
-            throw ValidationException::withMessages([
-                'rescheduleVehicleId' => ['Das gewählte Fahrzeug ist im Zeitraum nicht verfügbar.'],
-            ]);
-        }
-
-        app(BookingService::class)->reschedule(
-            $booking,
-            $start,
-            $end,
-            (int) $this->rescheduleVehicleId,
-        );
-
-        $this->finishReschedule();
-        Flux::toast(text: 'Buchung wurde erfolgreich umgebucht.', variant: 'success');
-    }
-
-    private function rescheduleByCategoryForUser(int $categoryId): void
-    {
-        $booking = $this->selectedBooking;
-        if (! $booking || ! $this->rescheduleChecked) {
-            return;
-        }
-
-        $this->authorize('update', $booking);
-
-        try {
-            $this->validateRescheduleTimes();
-
-            if (! $this->isRescheduleCategoryAllowed($categoryId)) {
-                Flux::toast(text: 'Diese Kategorie ist im gewählten Zeitraum nicht verfügbar.', variant: 'danger');
-
-                return;
-            }
-
-            [$start, $end] = $this->validatedReschedulePeriod();
-
-            app(BookingService::class)->rescheduleByCategory($booking, $start, $end, $categoryId);
-
-            $this->finishReschedule();
-            Flux::toast(text: 'Buchung wurde erfolgreich umgebucht.', variant: 'success');
-        } catch (ValidationException $exception) {
-            $message = collect($exception->errors())->flatten()->first() ?? 'Umbuchen fehlgeschlagen.';
-
-            Flux::toast(text: $message, variant: 'danger');
-        }
-    }
-
-    private function finishReschedule(): void
-    {
-        $this->showRescheduleModal = false;
-        $this->dispatch('fuhrpark-calendar-refresh');
-    }
-
-    private function validateRescheduleTimes(): void
-    {
-        $this->validate([
-            'rescheduleStartDate' => 'required|date',
-            'rescheduleEndDate' => 'required|date|after_or_equal:rescheduleStartDate',
-            'rescheduleStartTime' => 'required',
-            'rescheduleEndTime' => 'required',
-        ]);
-    }
-
     /**
      * @return array{0: Carbon, 1: Carbon}
      */
@@ -702,18 +434,6 @@ class Calendar extends Component
             $this->bookPeriodStart(),
             $this->bookPeriodEnd(),
             'bookEndTime',
-        );
-    }
-
-    /**
-     * @return array{0: Carbon, 1: Carbon}
-     */
-    private function validatedReschedulePeriod(): array
-    {
-        return $this->validatedPeriod(
-            $this->reschedulePeriodStart(),
-            $this->reschedulePeriodEnd(),
-            'rescheduleEndTime',
         );
     }
 
@@ -747,84 +467,6 @@ class Calendar extends Component
         }
 
         return Carbon::parse($this->bookEndDate.' '.$this->bookEndTime);
-    }
-
-    private function reschedulePeriodStart(): ?Carbon
-    {
-        if ($this->rescheduleStartDate === '' || $this->rescheduleStartTime === '') {
-            return null;
-        }
-
-        return Carbon::parse($this->rescheduleStartDate.' '.$this->rescheduleStartTime);
-    }
-
-    private function reschedulePeriodEnd(): ?Carbon
-    {
-        if ($this->rescheduleEndDate === '' || $this->rescheduleEndTime === '') {
-            return null;
-        }
-
-        return Carbon::parse($this->rescheduleEndDate.' '.$this->rescheduleEndTime);
-    }
-
-    private function resetRescheduleCheck(): void
-    {
-        $this->rescheduleChecked = false;
-        $this->rescheduleVehicleId = null;
-        $this->rescheduleOtherCategoryId = null;
-        $this->rescheduleCategoryId = null;
-    }
-
-    private function preselectRescheduleVehicle(AvailabilityResult $result, Booking $booking): void
-    {
-        if (! $this->reschedulePreferSameVehicle) {
-            return;
-        }
-
-        $currentVehicleId = $booking->vehicle_id;
-
-        if ($result->hasSameCategoryAlternatives() && $result->sameCategory->contains('id', $currentVehicleId)) {
-            $this->rescheduleVehicleId = $currentVehicleId;
-        }
-    }
-
-    private function isRescheduleVehicleAllowed(int $vehicleId): bool
-    {
-        $result = $this->rescheduleAvailability;
-
-        if ($result->sameCategory->contains('id', $vehicleId)) {
-            return true;
-        }
-
-        foreach ($result->otherCategories as $group) {
-            if ($group->vehicles->contains('id', $vehicleId)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function isRescheduleCategoryAllowed(int $categoryId): bool
-    {
-        $booking = $this->selectedBooking;
-        if (! $booking) {
-            return false;
-        }
-
-        $result = $this->rescheduleAvailability;
-
-        if ($result->hasSameCategoryAlternatives() && $booking->vehicle->vehicle_category_id === $categoryId) {
-            return true;
-        }
-
-        foreach ($result->otherCategories as $group) {
-            if ($group->category->id === $categoryId) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public function bookerStandortId(): ?int

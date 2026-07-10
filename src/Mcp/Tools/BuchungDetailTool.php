@@ -54,9 +54,16 @@ class BuchungDetailTool extends Tool
         Gate::forUser($user)->authorize('view', $booking);
 
         $presenter = app(McpBookingPresenter::class);
+        $detail = $presenter->detail($booking, $user);
 
         return Response::structured([
-            'buchung' => $presenter->detail($booking, $user),
+            'buchung' => $detail,
+            'hinweis_buchungsreferenz' => McpBookingPresenter::assistantReferenceHint(),
+            'hinweis_fuer_assistent' => 'Nur lesen — ändert nichts. Umbuchen: buchung_umbuchen_pruefen + buchung_umbuchen. Löschen: buchung_loeschen (nicht buchung_detail). Erfolg nur bei Tool-Antwort success=true und verified=true.',
+            'naechste_schritte' => [
+                'umbuchen' => ($detail['can_update'] ?? false) ? 'buchung_umbuchen_pruefen, dann buchung_umbuchen' : null,
+                'loeschen' => ($detail['can_cancel'] ?? false) ? 'buchung_loeschen' : null,
+            ],
         ]);
     }
 

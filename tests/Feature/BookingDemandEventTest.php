@@ -11,7 +11,6 @@ use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingDemandEventService;
 use Hwkdo\IntranetAppFuhrpark\Services\FuhrparkAdminStatisticsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 
 uses(RefreshDatabase::class);
 

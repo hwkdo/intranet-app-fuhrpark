@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use Hwkdo\IntranetAppFuhrpark\Contracts\BookingCalendarSyncInterface;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Services\MsGraphBookingCalendarSync;
@@ -11,7 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 test('booking calendar sync interface resolves to ms graph when package is installed', function (): void {
-    expect(app(\Hwkdo\IntranetAppFuhrpark\Contracts\BookingCalendarSyncInterface::class))
+    expect(app(BookingCalendarSyncInterface::class))
         ->toBeInstanceOf(MsGraphBookingCalendarSync::class);
 });
 

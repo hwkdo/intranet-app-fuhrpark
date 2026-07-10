@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Models\Standort;
 use App\Models\User;
-use Hwkdo\IntranetAppFuhrpark\Livewire\Calendar;
+use Hwkdo\IntranetAppFuhrpark\Livewire\BookingReschedule;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
@@ -13,16 +14,16 @@ use Spatie\Permission\Models\Permission;
 
 uses(RefreshDatabase::class);
 
-function fuhrparkCalendarStandort(): \App\Models\Standort
+function fuhrparkCalendarStandort(): Standort
 {
-    $standort = \App\Models\Standort::query()->create(['name' => 'Kalender-Standort']);
+    $standort = Standort::query()->create(['name' => 'Kalender-Standort']);
 
     fuhrparkMarkVehicleStandort($standort);
 
     return $standort;
 }
 
-function fuhrparkCalendarVehicle(?VehicleCategory $category = null, ?\App\Models\Standort $standort = null, array $attributes = []): Vehicle
+function fuhrparkCalendarVehicle(?VehicleCategory $category = null, ?Standort $standort = null, array $attributes = []): Vehicle
 {
     $category ??= VehicleCategory::factory()->create();
     $standort ??= fuhrparkCalendarStandort();
@@ -64,9 +65,8 @@ test('calendar reschedule assigns best vehicle automatically for normal users in
     $afternoonEnd = $afternoonStart->copy()->addHours(4);
 
     Livewire::actingAs($user)
-        ->test(Calendar::class)
-        ->set('selectedBookingId', $booking->id)
-        ->call('startReschedule')
+        ->test(BookingReschedule::class)
+        ->call('open', $booking->id)
         ->set('rescheduleStartDate', $afternoonStart->format('Y-m-d'))
         ->set('rescheduleEndDate', $afternoonEnd->format('Y-m-d'))
         ->set('rescheduleStartTime', $afternoonStart->format('H:i'))
@@ -78,7 +78,7 @@ test('calendar reschedule assigns best vehicle automatically for normal users in
         ->assertSee('automatisch das beste Fahrzeug zugewiesen')
         ->assertDontSee('Freie Fahrzeuge in Ihrer Kategorie')
         ->call('confirmReschedule')
-        ->assertSet('showRescheduleModal', false);
+        ->assertSet('showModal', false);
 
     $booking->refresh();
 
@@ -109,9 +109,8 @@ test('calendar reschedule allows admins to select a specific vehicle in same cat
     $afternoonEnd = $afternoonStart->copy()->addHours(4);
 
     Livewire::actingAs($admin)
-        ->test(Calendar::class)
-        ->set('selectedBookingId', $booking->id)
-        ->call('startReschedule')
+        ->test(BookingReschedule::class)
+        ->call('open', $booking->id)
         ->set('reschedulePreferSameVehicle', false)
         ->set('rescheduleStartDate', $afternoonStart->format('Y-m-d'))
         ->set('rescheduleEndDate', $afternoonEnd->format('Y-m-d'))
@@ -126,7 +125,7 @@ test('calendar reschedule allows admins to select a specific vehicle in same cat
         ->call('selectRescheduleVehicle', $vehicleB->id)
         ->assertSet('rescheduleVehicleId', $vehicleB->id)
         ->call('confirmReschedule')
-        ->assertSet('showRescheduleModal', false);
+        ->assertSet('showModal', false);
 
     $booking->refresh();
 
@@ -159,9 +158,8 @@ test('calendar reschedule shows other categories for admins even when same categ
     $afternoonEnd = $afternoonStart->copy()->addHours(4);
 
     Livewire::actingAs($admin)
-        ->test(Calendar::class)
-        ->set('selectedBookingId', $booking->id)
-        ->call('startReschedule')
+        ->test(BookingReschedule::class)
+        ->call('open', $booking->id)
         ->set('rescheduleStartDate', $afternoonStart->format('Y-m-d'))
         ->set('rescheduleEndDate', $afternoonEnd->format('Y-m-d'))
         ->set('rescheduleStartTime', $afternoonStart->format('H:i'))
@@ -199,9 +197,8 @@ test('calendar reschedule preselects current vehicle for admins when prefer same
     $afternoonEnd = $afternoonStart->copy()->addHours(4);
 
     Livewire::actingAs($admin)
-        ->test(Calendar::class)
-        ->set('selectedBookingId', $booking->id)
-        ->call('startReschedule')
+        ->test(BookingReschedule::class)
+        ->call('open', $booking->id)
         ->set('rescheduleStartDate', $afternoonStart->format('Y-m-d'))
         ->set('rescheduleEndDate', $afternoonEnd->format('Y-m-d'))
         ->set('rescheduleStartTime', $afternoonStart->format('H:i'))
@@ -242,9 +239,8 @@ test('calendar reschedule selects category only for normal users when same categ
     $afternoonEnd = $afternoonStart->copy()->addHours(4);
 
     Livewire::actingAs($user)
-        ->test(Calendar::class)
-        ->set('selectedBookingId', $booking->id)
-        ->call('startReschedule')
+        ->test(BookingReschedule::class)
+        ->call('open', $booking->id)
         ->set('rescheduleStartDate', $afternoonStart->format('Y-m-d'))
         ->set('rescheduleEndDate', $afternoonEnd->format('Y-m-d'))
         ->set('rescheduleStartTime', $afternoonStart->format('H:i'))
@@ -254,7 +250,7 @@ test('calendar reschedule selects category only for normal users when same categ
         ->assertSee('Kombi')
         ->assertDontSee('Freie Fahrzeuge in dieser Kategorie')
         ->call('selectRescheduleOtherCategory', $categoryB->id)
-        ->assertSet('showRescheduleModal', false);
+        ->assertSet('showModal', false);
 
     $booking->refresh();
 
@@ -291,9 +287,8 @@ test('calendar reschedule allows admins to select vehicle from other category wh
     $afternoonEnd = $afternoonStart->copy()->addHours(4);
 
     Livewire::actingAs($admin)
-        ->test(Calendar::class)
-        ->set('selectedBookingId', $booking->id)
-        ->call('startReschedule')
+        ->test(BookingReschedule::class)
+        ->call('open', $booking->id)
         ->set('rescheduleStartDate', $afternoonStart->format('Y-m-d'))
         ->set('rescheduleEndDate', $afternoonEnd->format('Y-m-d'))
         ->set('rescheduleStartTime', $afternoonStart->format('H:i'))
@@ -338,9 +333,8 @@ test('calendar reschedule shows message when no vehicle is available', function 
     $afternoonEnd = $afternoonStart->copy()->addHours(4);
 
     Livewire::actingAs($user)
-        ->test(Calendar::class)
-        ->set('selectedBookingId', $booking->id)
-        ->call('startReschedule')
+        ->test(BookingReschedule::class)
+        ->call('open', $booking->id)
         ->set('rescheduleStartDate', $afternoonStart->format('Y-m-d'))
         ->set('rescheduleEndDate', $afternoonEnd->format('Y-m-d'))
         ->set('rescheduleStartTime', $afternoonStart->format('H:i'))

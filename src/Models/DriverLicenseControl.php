@@ -14,6 +14,7 @@ class DriverLicenseControl extends Model
 {
     /** @use HasFactory<DriverLicenseControlFactory> */
     use HasFactory;
+
     protected $table = 'intranet_app_fuhrpark_driver_license_controls';
 
     protected $fillable = [

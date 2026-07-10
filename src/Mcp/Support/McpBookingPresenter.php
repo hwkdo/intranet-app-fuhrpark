@@ -7,15 +7,72 @@ namespace Hwkdo\IntranetAppFuhrpark\Mcp\Support;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\LogbookEntry;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingStatusResolver;
+use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkUrls;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 
 class McpBookingPresenter
 {
+    /**
+     * @var array<int, string>
+     */
+    private const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
+
+    public static function assistantReferenceHint(): string
+    {
+        return 'Wenn du eine Buchung gegenüber dem Nutzer erwähnst, nutze immer das Feld «bezeichnung» (Zweck + Datum/Uhrzeit, ggf. Kennzeichen). Niemals nur die ID oder «Buchung #123».';
+    }
+
     public function __construct(
         private readonly BookingStatusResolver $statusResolver,
     ) {}
+
+    public function formatPeriodLabel(Booking $booking): string
+    {
+        $start = $booking->starts_at;
+        $end = $booking->ends_at;
+        $startWeekday = self::WEEKDAYS[(int) $start->format('w')];
+
+        if ($start->isSameDay($end)) {
+            return sprintf(
+                '%s %s, %s–%s',
+                $startWeekday,
+                $start->format('d.m.Y'),
+                $start->format('H:i'),
+                $end->format('H:i'),
+            );
+        }
+
+        $endWeekday = self::WEEKDAYS[(int) $end->format('w')];
+
+        return sprintf(
+            '%s %s, %s – %s %s, %s',
+            $startWeekday,
+            $start->format('d.m.Y'),
+            $start->format('H:i'),
+            $endWeekday,
+            $end->format('d.m.Y'),
+            $end->format('H:i'),
+        );
+    }
+
+    public function formatBezeichnung(Booking $booking): string
+    {
+        $zweck = trim((string) $booking->description);
+        if ($zweck === '') {
+            $zweck = $booking->purpose->label();
+        }
+
+        $label = $zweck.' — '.$this->formatPeriodLabel($booking);
+        $licensePlate = $booking->vehicle?->license_plate;
+
+        if ($licensePlate !== null && $licensePlate !== '') {
+            $label .= ' ('.$licensePlate.')';
+        }
+
+        return $label;
+    }
 
     /**
      * @return array<string, mixed>
@@ -37,6 +94,9 @@ class McpBookingPresenter
 
         return [
             'id' => $booking->id,
+            'bezeichnung' => $this->formatBezeichnung($booking),
+            'zweck' => $booking->description,
+            'zeitraum' => $this->formatPeriodLabel($booking),
             'status' => $status->value,
             'status_label' => $status->label(),
             'purpose' => $booking->purpose->value,
@@ -52,8 +112,8 @@ class McpBookingPresenter
             'has_logbook' => $booking->logbookEntry !== null,
             'km_start' => $booking->km_start,
             'km_end' => $booking->km_end,
-            'url' => route('apps.fuhrpark.meine'),
-            'url_markdown' => sprintf('[Buchung #%d](%s)', $booking->id, route('apps.fuhrpark.meine')),
+            'url' => FuhrparkUrls::route('apps.fuhrpark.meine'),
+            'url_markdown' => sprintf('[%s](%s)', $this->formatBezeichnung($booking), FuhrparkUrls::route('apps.fuhrpark.meine')),
         ];
     }
 
@@ -65,11 +125,15 @@ class McpBookingPresenter
         $summary = $this->summarize($booking, $viewer);
         $canViewLogbook = $viewer !== null && Gate::forUser($viewer)->check('viewLogbook', $booking);
 
+        $canCancel = $viewer !== null && Gate::forUser($viewer)->check('cancel', $booking);
+        $statusResolver = app(BookingStatusResolver::class);
+
         return array_merge($summary, [
             'electric_route_km' => $booking->electric_route_km,
             'sync_to_calendar' => (bool) $booking->sync_to_calendar,
-            'can_cancel' => $viewer !== null && Gate::forUser($viewer)->check('cancel', $booking),
+            'can_cancel' => $canCancel,
             'can_update' => $viewer !== null && Gate::forUser($viewer)->check('update', $booking),
+            'requires_cancellation_reason' => $canCancel && $statusResolver->requiresCancellationReason($booking),
             'handout' => $booking->handout ? [
                 'id' => $booking->handout->id,
                 'handed_out_at' => $booking->handout->created_at?->toIso8601String(),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppFuhrpark\Mcp\Tools;
 
+use Hwkdo\IntranetAppFuhrpark\Mcp\Support\McpBookingPresenter;
 use Hwkdo\IntranetAppFuhrpark\Mcp\Support\McpMissingLogbookSupport;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Gate;
@@ -37,8 +38,9 @@ class FehlendeFahrtenbuecherAnzeigenTool extends Tool
         return Response::structured([
             'count' => $count,
             'fehlende_fahrtenbuecher' => $items,
+            'hinweis_buchungsreferenz' => McpBookingPresenter::assistantReferenceHint(),
             'hinweis_fuer_assistent' => $count > 0
-                ? 'Der Nutzer hat '.$count.' offene Fahrtenbucheinträge. Weise zu Beginn der Antwort klar darauf hin und biete an, diese per fahrtenbuch_eintragen zu erfassen.'
+                ? 'Der Nutzer hat '.$count.' offene Fahrtenbucheinträge. Weise zu Beginn der Antwort klar darauf hin (jeweils mit «bezeichnung»: Zweck + Datum, z. B. «Kundentermin — Fr. 11.07.2026, 08:00–12:00») und biete an, diese per fahrtenbuch_eintragen zu erfassen.'
                 : 'Keine offenen Fahrtenbucheinträge — kein Hinweis nötig.',
         ]);
     }

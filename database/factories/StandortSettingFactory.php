@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppFuhrpark\Database\Factories;
 
 use Hwkdo\IntranetAppFuhrpark\Models\StandortSetting;
-use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

@@ -111,8 +111,9 @@ class BuchungenAnzeigenTool extends Tool
             'buchungen' => $items,
             'fehlende_fahrtenbuecher_count' => count($fehlendeFahrtenbuecher),
             'fehlende_fahrtenbuecher' => $fehlendeFahrtenbuecher,
+            'hinweis_buchungsreferenz' => McpBookingPresenter::assistantReferenceHint(),
             'hinweis_fuer_assistent' => count($fehlendeFahrtenbuecher) > 0
-                ? 'Der Nutzer hat offene Fahrtenbucheinträge — zu Beginn der Antwort darauf hinweisen.'
+                ? 'Der Nutzer hat offene Fahrtenbucheinträge — zu Beginn der Antwort darauf hinweisen (jeweils mit «bezeichnung», nicht nur ID).'
                 : null,
         ]);
     }

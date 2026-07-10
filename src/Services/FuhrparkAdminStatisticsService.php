@@ -23,31 +23,31 @@ use Illuminate\Support\Facades\DB;
 
 class FuhrparkAdminStatisticsService
 {
-  /**
-   * @return array{
-   *     period: string,
-   *     period_label: string,
-   *     overview: array{
-   *         total_km: int,
-   *         completed_trips: int,
-   *         average_km_per_trip: float,
-   *         total_bookings: int,
-   *         commute_bookings: int,
-   *         handouts: int,
-   *         returns: int,
-   *         active_vehicles: int,
-   *         electric_route_km: int,
-   *         combustion_route_km: int,
-   *     },
-   *     top_vehicle_by_km: ?array{license_plate: string, km: int, trips: int},
-   *     top_vehicle_by_bookings: ?array{license_plate: string, bookings: int},
-   *     top_driver_by_km: ?array{name: string, km: int, trips: int},
-   *     top_driver_by_bookings: ?array{name: string, bookings: int},
-   *     top_vehicles_by_km: list<array{license_plate: string, km: int, trips: int}>,
-   *     top_drivers_by_km: list<array{name: string, km: int, trips: int}>,
-   *     bookings_by_purpose: list<array{purpose: string, label: string, count: int}>,
-   * }
-   */
+    /**
+     * @return array{
+     *     period: string,
+     *     period_label: string,
+     *     overview: array{
+     *         total_km: int,
+     *         completed_trips: int,
+     *         average_km_per_trip: float,
+     *         total_bookings: int,
+     *         commute_bookings: int,
+     *         handouts: int,
+     *         returns: int,
+     *         active_vehicles: int,
+     *         electric_route_km: int,
+     *         combustion_route_km: int,
+     *     },
+     *     top_vehicle_by_km: ?array{license_plate: string, km: int, trips: int},
+     *     top_vehicle_by_bookings: ?array{license_plate: string, bookings: int},
+     *     top_driver_by_km: ?array{name: string, km: int, trips: int},
+     *     top_driver_by_bookings: ?array{name: string, bookings: int},
+     *     top_vehicles_by_km: list<array{license_plate: string, km: int, trips: int}>,
+     *     top_drivers_by_km: list<array{name: string, km: int, trips: int}>,
+     *     bookings_by_purpose: list<array{purpose: string, label: string, count: int}>,
+     * }
+     */
     public function collect(string $period = 'month'): array
     {
         [$from, $to, $periodLabel] = $this->resolvePeriod($period);
@@ -775,9 +775,9 @@ class FuhrparkAdminStatisticsService
         };
     }
 
-  /**
-   * @return Builder<Booking>
-   */
+    /**
+     * @return Builder<Booking>
+     */
     private function tripBookingsQuery(?CarbonInterface $from, ?CarbonInterface $to): Builder
     {
         return $this->applyPeriod(
@@ -790,9 +790,9 @@ class FuhrparkAdminStatisticsService
         );
     }
 
-  /**
-   * @return Builder<Booking>
-   */
+    /**
+     * @return Builder<Booking>
+     */
     private function completedTripsQuery(?CarbonInterface $from, ?CarbonInterface $to): Builder
     {
         return $this->tripBookingsQuery($from, $to)
@@ -801,10 +801,10 @@ class FuhrparkAdminStatisticsService
             ->whereColumn('km_end', '>=', 'km_start');
     }
 
-  /**
-   * @param  Builder<Booking>  $query
-   * @return Builder<Booking>
-   */
+    /**
+     * @param  Builder<Booking>  $query
+     * @return Builder<Booking>
+     */
     private function applyPeriod(Builder $query, ?CarbonInterface $from, ?CarbonInterface $to): Builder
     {
         return $query

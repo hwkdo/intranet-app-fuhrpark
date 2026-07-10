@@ -7,7 +7,7 @@ use Hwkdo\IntranetAppFuhrpark\Services\BookingService;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingStatusResolver;
 use Hwkdo\IntranetAppFuhrpark\Services\LogbookService;
 use Illuminate\Support\Facades\Auth;
-use function Livewire\Volt\{computed, state, title};
+use function Livewire\Volt\{computed, state, title, on};
 
 title('Fuhrpark - Meine Buchungen');
 
@@ -133,6 +133,20 @@ $confirmCancel = function (): void {
     $this->cancelReason = '';
 };
 
+$openReschedule = function (int $bookingId): void {
+    $booking = Booking::query()
+        ->with(['vehicle', 'handout.returnRecord', 'logbookEntry'])
+        ->where('driver_id', Auth::id())
+        ->findOrFail($bookingId);
+
+    $this->authorize('update', $booking);
+    $this->dispatch('open-booking-reschedule', bookingId: $bookingId);
+};
+
+on(['fuhrpark-booking-rescheduled' => function () {
+    unset($this->bookings);
+}]);
+
 ?>
 
 <x-intranet-app-fuhrpark::fuhrpark-layout heading="Meine Buchungen" subheading="Übersicht Ihrer Fahrzeugbuchungen">
@@ -169,6 +183,9 @@ $confirmCancel = function (): void {
                         @if(app(BookingStatusResolver::class)->canBeCancelledByDriver($booking))
                             <flux:button size="sm" variant="danger" wire:click="openCancel({{ $booking->id }})">Löschen</flux:button>
                         @endif
+                        @can('update', $booking)
+                            <flux:button size="sm" wire:click="openReschedule({{ $booking->id }})">Umbuchen</flux:button>
+                        @endcan
                     </flux:table.cell>
                 </flux:table.row>
             @endforeach
@@ -263,4 +280,6 @@ $confirmCancel = function (): void {
 
         <flux:button class="mt-4" variant="danger" wire:click="confirmCancel">Löschen bestätigen</flux:button>
     </flux:modal>
+
+    <livewire:intranet-app-fuhrpark::booking-reschedule />
 </x-intranet-app-fuhrpark::fuhrpark-layout>

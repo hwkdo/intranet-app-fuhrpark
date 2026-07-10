@@ -15,6 +15,7 @@ use Hwkdo\IntranetAppFuhrpark\Models\LogbookEntry;
 use Hwkdo\IntranetAppFuhrpark\Models\Project;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
 use Spatie\Permission\Models\Role;
 
@@ -86,7 +87,7 @@ class LogbookService
         );
     }
 
-    public function entriesForVehicle(Vehicle $vehicle): \Illuminate\Support\Collection
+    public function entriesForVehicle(Vehicle $vehicle): Collection
     {
         return LogbookEntry::query()
             ->whereHas('booking', fn ($query) => $query->where('vehicle_id', $vehicle->id))

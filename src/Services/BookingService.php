@@ -21,9 +21,9 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Throwable;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
+use Throwable;
 
 class BookingService
 {

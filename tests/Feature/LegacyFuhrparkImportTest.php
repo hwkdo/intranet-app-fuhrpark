@@ -6,8 +6,8 @@ use App\Models\Standort;
 use App\Models\User;
 use App\Services\IntranetLegacyService;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
+use Hwkdo\IntranetAppFuhrpark\Models\DriverLicense;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
-use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\Legacy\LegacyFuhrparkImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -134,7 +134,7 @@ test('legacy import updates existing driver license by user id when legacy id is
 
     $user = User::factory()->create(['legacy_id' => 13]);
 
-    \Hwkdo\IntranetAppFuhrpark\Models\DriverLicense::query()->create([
+    DriverLicense::query()->create([
         'user_id' => $user->id,
         'valid_until' => now()->addMonths(6),
     ]);
@@ -157,9 +157,9 @@ test('legacy import updates existing driver license by user id when legacy id is
         only: ['driver-licenses'],
     );
 
-    expect(\Hwkdo\IntranetAppFuhrpark\Models\DriverLicense::query()->count())->toBe(1);
+    expect(DriverLicense::query()->count())->toBe(1);
 
-    $license = \Hwkdo\IntranetAppFuhrpark\Models\DriverLicense::query()->where('user_id', $user->id)->first();
+    $license = DriverLicense::query()->where('user_id', $user->id)->first();
 
     expect($license)->not->toBeNull()
         ->and($license->legacy_id)->toBe(67)
