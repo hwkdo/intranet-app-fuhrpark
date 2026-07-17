@@ -38,6 +38,9 @@ class AppSettings extends BaseAppSettings
         public int $utilizationBusinessHourEnd = 18,
 
         /** @var list<int> ISO-Wochentag: 1 = Montag … 7 = Sonntag */
+        #[Description('Geschäftstage (ISO 1=Mo … 7=So) für die Flottenauslastung in der Statistik')]
+        public array $utilizationBusinessDays = [1, 2, 3, 4, 5],
+
         #[Description('OpenWebUI-Modell für den Fuhrpark-KI-Chat (MCP-Server)')]
         public string $openWebUiModel = 'intranet-app-fuhrpark',
     ) {}
