@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppFuhrpark;
 
+use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
+use Hwkdo\IntranetAppFuhrpark\Dashboard\FuhrparkDashboardWidgetProvider;
 use Hwkdo\IntranetAppFuhrpark\Data\AppSettings;
 use Hwkdo\IntranetAppFuhrpark\Data\UserSettings;
 use Hwkdo\IntranetAppFuhrpark\Mcp\Servers\FuhrparkServer;
@@ -15,7 +18,7 @@ use Hwkdo\IntranetAppFuhrpark\Tasks\MissingLogbookTaskProvider;
 use Hwkdo\IntranetAppFuhrpark\Tasks\NoShowBookingTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesTasksInterface
+class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -71,6 +74,16 @@ class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesTasksInterfac
             MissingLogbookTaskProvider::class,
             NoShowBookingTaskProvider::class,
             DriverLicenseTaskProvider::class,
+        ];
+    }
+
+    /**
+     * @return array<class-string<DashboardWidgetProviderInterface>>
+     */
+    public static function dashboardWidgetProviders(): array
+    {
+        return [
+            FuhrparkDashboardWidgetProvider::class,
         ];
     }
 }

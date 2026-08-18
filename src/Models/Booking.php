@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppFuhrpark\Models;
 use Hwkdo\IntranetAppFuhrpark\Database\Factories\BookingFactory;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -92,6 +93,20 @@ class Booking extends Model
     public function chargeLockBooking(): BelongsTo
     {
         return $this->belongsTo(self::class, 'charge_lock_for_booking_id');
+    }
+
+    /**
+     * Kommende Fahrten (noch nicht begonnen), ohne Sperr-/Ladebuchungen.
+     *
+     * @param  Builder<Booking>  $query
+     * @return Builder<Booking>
+     */
+    public function scopeUpcoming(Builder $query): Builder
+    {
+        return $query
+            ->where('starts_at', '>=', now())
+            ->whereNotIn('purpose', [BookingPurpose::Lock, BookingPurpose::ChargeLock])
+            ->orderBy('starts_at');
     }
 
     protected static function newFactory(): BookingFactory
