@@ -11,16 +11,15 @@ use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandReason;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingDemandSource;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
 use Hwkdo\IntranetAppFuhrpark\Events\FuhrparkBookingChanged;
-use Hwkdo\IntranetAppFuhrpark\Mail\BookingCancelledAdminMail;
-use Hwkdo\IntranetAppFuhrpark\Mail\BookingCancelledMail;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
+use Hwkdo\IntranetAppFuhrpark\Notifications\BookingCancelledAdminNotification;
+use Hwkdo\IntranetAppFuhrpark\Notifications\BookingCancelledNotification;
 use Hwkdo\IntranetAppFuhrpark\Models\IntranetAppFuhrparkSettings;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Throwable;
@@ -225,7 +224,7 @@ class BookingService
             $role = Role::findByName($roleName, 'web');
 
             foreach ($role->users as $admin) {
-                Mail::to($admin->email)->send(new BookingCancelledAdminMail($booking, $reason, $cancelledBy));
+                $admin->notify(new BookingCancelledAdminNotification($booking, $reason, $cancelledBy));
             }
         }
 
@@ -441,18 +440,11 @@ class BookingService
 
     private function notifyPartiesOfCancellation(Booking $booking): void
     {
-        $booking->loadMissing(['driver', 'booker']);
+        $booking->loadMissing(['driver', 'booker', 'vehicle']);
 
-        $emails = collect([
-            $booking->driver?->email,
-            $booking->booker?->email,
-        ])
-            ->filter(fn (?string $email): bool => filled($email))
-            ->unique()
-            ->values();
-
-        foreach ($emails as $email) {
-            Mail::to($email)->send(new BookingCancelledMail($booking));
-        }
+        collect([$booking->driver, $booking->booker])
+            ->filter()
+            ->unique(fn ($user) => $user->getKey())
+            ->each(fn ($user) => $user->notify(new BookingCancelledNotification($booking)));
     }
 }

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppFuhrpark;
 
+use Hwkdo\IntranetAppBase\Data\NotificationTypeDefinition;
 use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesNotificationsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppFuhrpark\Dashboard\FuhrparkDashboardWidgetProvider;
@@ -18,7 +20,7 @@ use Hwkdo\IntranetAppFuhrpark\Tasks\MissingLogbookTaskProvider;
 use Hwkdo\IntranetAppFuhrpark\Tasks\NoShowBookingTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesTasksInterface
+class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -84,6 +86,50 @@ class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidg
     {
         return [
             FuhrparkDashboardWidgetProvider::class,
+        ];
+    }
+
+    public static function notificationTypes(): array
+    {
+        return [
+            new NotificationTypeDefinition(
+                key: 'fuhrpark.booking_cancelled',
+                label: 'Buchung gelöscht',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                mandatory: true,
+            ),
+            new NotificationTypeDefinition(
+                key: 'fuhrpark.booking_cancelled_admin',
+                label: 'Buchung gelöscht (Admin)',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                mandatory: false,
+                defaultEnabled: true,
+            ),
+            new NotificationTypeDefinition(
+                key: 'fuhrpark.vehicle_damage',
+                label: 'Fahrzeugschaden gemeldet',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                mandatory: true,
+            ),
+            new NotificationTypeDefinition(
+                key: 'fuhrpark.project_trip',
+                label: 'Projektfahrt erfasst',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                mandatory: false,
+                defaultEnabled: true,
+            ),
+            new NotificationTypeDefinition(
+                key: 'fuhrpark.project_trip_changed',
+                label: 'Projektfahrt geändert',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                mandatory: false,
+                defaultEnabled: true,
+            ),
         ];
     }
 }

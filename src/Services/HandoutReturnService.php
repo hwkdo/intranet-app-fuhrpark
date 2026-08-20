@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppFuhrpark\Services;
 
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
-use Hwkdo\IntranetAppFuhrpark\Mail\VehicleDamageReportedMail;
+use Hwkdo\IntranetAppFuhrpark\Notifications\VehicleDamageReportedNotification;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\Handout;
 use Hwkdo\IntranetAppFuhrpark\Models\IntranetAppFuhrparkSettings;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 
@@ -135,7 +134,7 @@ class HandoutReturnService
         $role = Role::findByName($roleName, 'web');
 
         foreach ($role->users as $user) {
-            Mail::to($user->email)->queue(new VehicleDamageReportedMail($booking, $reporter));
+            $user->notify(new VehicleDamageReportedNotification($booking, $reporter));
         }
     }
 }

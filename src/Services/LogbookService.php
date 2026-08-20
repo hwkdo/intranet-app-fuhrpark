@@ -7,8 +7,8 @@ namespace Hwkdo\IntranetAppFuhrpark\Services;
 use Carbon\CarbonInterface;
 use Hwkdo\IntranetAppFuhrpark\Data\BookingStoreData;
 use Hwkdo\IntranetAppFuhrpark\Enums\BookingPurpose;
-use Hwkdo\IntranetAppFuhrpark\Mail\ProjectTripChangedMail;
-use Hwkdo\IntranetAppFuhrpark\Mail\ProjectTripRecordedMail;
+use Hwkdo\IntranetAppFuhrpark\Notifications\ProjectTripChangedNotification;
+use Hwkdo\IntranetAppFuhrpark\Notifications\ProjectTripRecordedNotification;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\IntranetAppFuhrparkSettings;
 use Hwkdo\IntranetAppFuhrpark\Models\LogbookEntry;
@@ -16,7 +16,6 @@ use Hwkdo\IntranetAppFuhrpark\Models\Project;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Mail;
 use Spatie\Permission\Models\Role;
 
 class LogbookService
@@ -104,11 +103,11 @@ class LogbookService
         $project = $entry->project_id ? Project::query()->find($entry->project_id) : null;
 
         foreach ($role->users as $recipient) {
-            $mailable = $changed
-                ? new ProjectTripChangedMail($entry, $project, $oldKm)
-                : new ProjectTripRecordedMail($entry, $project);
-
-            Mail::to($recipient->email)->queue($mailable);
+            if ($changed) {
+                $recipient->notify(new ProjectTripChangedNotification($entry, $project, $oldKm));
+            } else {
+                $recipient->notify(new ProjectTripRecordedNotification($entry, $project));
+            }
         }
     }
 }
