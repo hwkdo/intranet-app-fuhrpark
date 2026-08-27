@@ -8,7 +8,7 @@
     $defaultNavItems = [
         ['label' => 'Kalender', 'href' => route('apps.fuhrpark.index'), 'icon' => 'calendar', 'description' => 'Fahrzeuge buchen', 'buttonText' => 'Kalender öffnen'],
         ['label' => 'Meine Buchungen', 'href' => route('apps.fuhrpark.meine'), 'icon' => 'clipboard-document-list', 'description' => 'Eigene Buchungen verwalten', 'buttonText' => 'Buchungen anzeigen'],
-        ['label' => 'KI-Chat', 'href' => route('apps.fuhrpark.chat'), 'icon' => 'chat-bubble-left-right', 'description' => 'Fahrzeugbuchungen mit KI und MCP-Server', 'buttonText' => 'Chat öffnen'],
+        ['label' => 'KI-Chat', 'href' => route('apps.fuhrpark.chat'), 'icon' => 'chat-bubble-left-right', 'description' => 'Fahrzeugbuchungen mit KI und MCP-Server', 'buttonText' => 'Chat öffnen', 'requiresAiUsage' => true],
         ['label' => 'Mein Team', 'href' => route('apps.fuhrpark.team'), 'icon' => 'user-group', 'description' => 'Buchungen der Mitarbeitenden', 'buttonText' => 'Team anzeigen', 'permission' => 'fuhrpark.view-team'],
         ['label' => 'Zentrale', 'href' => route('apps.fuhrpark.zentrale'), 'icon' => 'building-office', 'description' => 'Ausgabe und Rückgabe', 'buttonText' => 'Zentrale öffnen', 'permission' => 'operate-app-fuhrpark-zentrale'],
         ['label' => 'Führerscheine', 'href' => route('apps.fuhrpark.fuehrerscheine'), 'icon' => 'identification', 'description' => 'Führerscheinkontrollen verwalten', 'buttonText' => 'Führerscheine öffnen', 'permission' => 'manage-app-fuhrpark-driver-licenses'],
