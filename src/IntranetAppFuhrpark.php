@@ -13,7 +13,6 @@ use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppFuhrpark\Dashboard\FuhrparkDashboardWidgetProvider;
 use Hwkdo\IntranetAppFuhrpark\Data\AppSettings;
-use Hwkdo\IntranetAppFuhrpark\Data\UserSettings;
 use Hwkdo\IntranetAppFuhrpark\Mcp\Servers\FuhrparkServer;
 use Hwkdo\IntranetAppFuhrpark\Tasks\DriverLicenseTaskProvider;
 use Hwkdo\IntranetAppFuhrpark\Tasks\MissingLogbookTaskProvider;
@@ -49,7 +48,7 @@ class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidg
 
     public static function userSettingsClass(): ?string
     {
-        return UserSettings::class;
+        return null;
     }
 
     public static function appSettingsClass(): ?string
