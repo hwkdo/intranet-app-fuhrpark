@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppFuhrpark;
 
 use Hwkdo\IntranetAppBase\Data\NotificationTypeDefinition;
+use Hwkdo\IntranetAppBase\Data\SearchActionDefinition;
 use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesNotificationsInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesSearchActionsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppFuhrpark\Dashboard\FuhrparkDashboardWidgetProvider;
@@ -19,7 +21,7 @@ use Hwkdo\IntranetAppFuhrpark\Tasks\MissingLogbookTaskProvider;
 use Hwkdo\IntranetAppFuhrpark\Tasks\NoShowBookingTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesTasksInterface
+class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -128,6 +130,24 @@ class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidg
                 appName: self::app_name(),
                 mandatory: false,
                 defaultEnabled: true,
+            ),
+        ];
+    }
+
+    public static function searchActions(): array
+    {
+        return [
+            new SearchActionDefinition(
+                key: 'fuhrpark.book',
+                title: 'Fahrzeug buchen',
+                keywords: ['fahrzeug buchen', 'auto buchen', 'fuhrpark'],
+                routeName: 'apps.fuhrpark.index',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                icon: self::app_icon(),
+                permission: 'see-app-fuhrpark',
+                subtitle: self::app_name(),
+                sort: 100,
             ),
         ];
     }
