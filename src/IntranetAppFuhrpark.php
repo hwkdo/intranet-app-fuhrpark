@@ -149,6 +149,18 @@ class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidg
                 subtitle: self::app_name(),
                 sort: 100,
             ),
+            new SearchActionDefinition(
+                key: 'fuhrpark.fahrtenbuch',
+                title: 'Fahrtenbuch',
+                keywords: ['fahrtenbuch', 'fahrtenbuch eintragen', 'meine buchungen', 'fuhrpark buchungen'],
+                routeName: 'apps.fuhrpark.meine',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                icon: 'clipboard-document-list',
+                permission: 'see-app-fuhrpark',
+                subtitle: self::app_name(),
+                sort: 110,
+            ),
         ];
     }
 }
