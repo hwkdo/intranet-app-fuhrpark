@@ -11,7 +11,9 @@
         ['label' => 'KI-Chat', 'href' => route('apps.fuhrpark.chat'), 'icon' => 'chat-bubble-left-right', 'description' => 'Fahrzeugbuchungen mit KI und MCP-Server', 'buttonText' => 'Chat öffnen', 'requiresAiUsage' => true],
         ['label' => 'Mein Team', 'href' => route('apps.fuhrpark.team'), 'icon' => 'user-group', 'description' => 'Buchungen der Mitarbeitenden', 'buttonText' => 'Team anzeigen', 'permission' => 'fuhrpark.view-team'],
         ['label' => 'Zentrale', 'href' => route('apps.fuhrpark.zentrale'), 'icon' => 'building-office', 'description' => 'Ausgabe und Rückgabe', 'buttonText' => 'Zentrale öffnen', 'permission' => 'operate-app-fuhrpark-zentrale'],
-        ['label' => 'Führerscheine', 'href' => route('apps.fuhrpark.fuehrerscheine'), 'icon' => 'identification', 'description' => 'Führerscheinkontrollen verwalten', 'buttonText' => 'Führerscheine öffnen', 'permission' => 'manage-app-fuhrpark-driver-licenses'],        ['label' => 'App-Info', 'href' => route('apps.fuhrpark.info'), 'icon' => 'information-circle', 'description' => 'Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
+        ['label' => 'Führerscheine', 'href' => route('apps.fuhrpark.fuehrerscheine'), 'icon' => 'identification', 'description' => 'Führerscheinkontrollen verwalten', 'buttonText' => 'Führerscheine öffnen', 'permission' => 'manage-app-fuhrpark-driver-licenses'],
+        ['label' => 'Benachrichtigungen', 'href' => route('apps.fuhrpark.settings.notifications'), 'icon' => 'bell', 'description' => 'Benachrichtigungen dieser App konfigurieren', 'buttonText' => 'Benachrichtigungen öffnen'],
+        ['label' => 'App-Info', 'href' => route('apps.fuhrpark.info'), 'icon' => 'information-circle', 'description' => 'Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
         ['label' => 'Admin', 'href' => route('apps.fuhrpark.admin.index'), 'icon' => 'shield-check', 'description' => 'Stammdaten und Statistik', 'buttonText' => 'Admin öffnen', 'permission' => 'manage-app-fuhrpark'],
     ];
 

@@ -17,6 +17,8 @@ Route::middleware(['web', 'auth', 'can:see-app-fuhrpark'])->group(function (): v
         ->name('apps.fuhrpark.chat');
 
     Volt::route('apps/fuhrpark/info', 'apps.fuhrpark.info')->name('apps.fuhrpark.info');
+    Volt::route('apps/fuhrpark/settings/notifications', 'apps.fuhrpark.settings.notifications')
+        ->name('apps.fuhrpark.settings.notifications');
 });
 
 
