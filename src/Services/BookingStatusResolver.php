@@ -32,7 +32,12 @@ class BookingStatusResolver
             return BookingStatus::Completed;
         }
 
-        $limit = $booking->starts_at->copy()->addDay();
+        // Same-day bookings keep a 24h grace after start; multi-day stay
+        // overdue until ends_at so late pickup on day 2+ is still possible.
+        $graceLimit = $booking->starts_at->copy()->addDay();
+        $limit = $booking->ends_at->greaterThan($graceLimit)
+            ? $booking->ends_at->copy()
+            : $graceLimit;
 
         if ($now < $limit) {
             return BookingStatus::Overdue;
@@ -51,7 +56,7 @@ class BookingStatusResolver
             return false;
         }
 
-        if (! $booking->starts_at->isSameDay(now())) {
+        if (! $this->bookingOverlapsToday($booking)) {
             return false;
         }
 
@@ -59,6 +64,12 @@ class BookingStatusResolver
             BookingStatus::Reserved,
             BookingStatus::Overdue,
         ], true);
+    }
+
+    private function bookingOverlapsToday(Booking $booking): bool
+    {
+        return $booking->starts_at->lte(now()->endOfDay())
+            && $booking->ends_at->gte(now()->startOfDay());
     }
 
     public function isCurrentlyHandedOut(Booking $booking): bool

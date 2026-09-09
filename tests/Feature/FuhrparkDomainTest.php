@@ -1038,6 +1038,44 @@ test('awaiting handout today excludes handed out and blocking bookings', functio
         ->and($resolver->isAwaitingHandoutToday($lock))->toBeFalse();
 });
 
+test('awaiting handout today includes multi-day bookings after start day', function (): void {
+    Carbon::setTestNow(Carbon::today()->setTime(10, 0));
+    $vehicle = fuhrparkVehicle();
+    $resolver = app(BookingStatusResolver::class);
+
+    $multiDay = Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'starts_at' => now()->subDay()->setTime(8, 0),
+        'ends_at' => now()->addDay()->setTime(18, 0),
+    ]);
+
+    $endedYesterday = Booking::factory()->create([
+        'vehicle_id' => fuhrparkVehicle()->id,
+        'starts_at' => now()->subDays(3)->setTime(8, 0),
+        'ends_at' => now()->subDay()->setTime(18, 0),
+    ]);
+
+    expect($resolver->isAwaitingHandoutToday($multiDay))->toBeTrue()
+        ->and($resolver->resolve($multiDay))->toBe(BookingStatus::Overdue)
+        ->and($resolver->isAwaitingHandoutToday($endedYesterday))->toBeFalse()
+        ->and($resolver->resolve($endedYesterday))->toBe(BookingStatus::NoShow);
+});
+
+test('single-day booking becomes no-show one day after start', function (): void {
+    Carbon::setTestNow(Carbon::today()->setTime(10, 0));
+    $vehicle = fuhrparkVehicle();
+    $resolver = app(BookingStatusResolver::class);
+
+    $singleDay = Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'starts_at' => now()->subDay()->setTime(8, 0),
+        'ends_at' => now()->subDay()->setTime(12, 0),
+    ]);
+
+    expect($resolver->resolve($singleDay))->toBe(BookingStatus::NoShow)
+        ->and($resolver->isAwaitingHandoutToday($singleDay))->toBeFalse();
+});
+
 test('awaiting return today includes only handed out vehicles due today', function (): void {
     Carbon::setTestNow(Carbon::today()->setTime(10, 0));
     $vehicle = fuhrparkVehicle();

@@ -189,3 +189,26 @@ test('desk passes selected handout driver to handout service', function (): void
         ->and($handout->driver_id)->toBe($handoutDriver->id)
         ->and($handout->signature_data)->toBe(['data' => 'base64-signature']);
 });
+
+test('desk lists multi-day bookings for handout after the start day', function (): void {
+    Carbon::setTestNow(Carbon::today()->setTime(10, 0));
+
+    $driver = User::factory()->create([
+        'active' => true,
+        'vorname' => 'Mehrtag',
+        'nachname' => 'Fahrer',
+    ]);
+    $vehicle = fuhrparkDeskVehicle();
+
+    Booking::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'starts_at' => now()->subDay()->setTime(8, 0),
+        'ends_at' => now()->addDay()->setTime(18, 0),
+    ]);
+
+    Livewire::actingAs(fuhrparkDeskOperator())
+        ->test('apps.fuhrpark.desk')
+        ->assertSee($vehicle->license_plate)
+        ->assertSee('Mehrtag Fahrer');
+});

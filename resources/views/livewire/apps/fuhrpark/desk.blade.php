@@ -40,7 +40,8 @@ $expectedHandouts = computed(function () {
     $resolver = app(BookingStatusResolver::class);
 
     $query = Booking::query()
-        ->whereDate('starts_at', today())
+        ->where('starts_at', '<=', now()->endOfDay())
+        ->where('ends_at', '>=', now()->startOfDay())
         ->whereDoesntHave('handout')
         ->whereNotIn('purpose', [BookingPurpose::Lock, BookingPurpose::ChargeLock])
         ->with(['vehicle', 'driver'])
