@@ -11,10 +11,7 @@ use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
-
-uses(RefreshDatabase::class);
 
 test('booking service stores calendar event id when sync is enabled', function (): void {
     $user = User::factory()->create();

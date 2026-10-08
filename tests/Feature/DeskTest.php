@@ -10,11 +10,8 @@ use Hwkdo\IntranetAppFuhrpark\Models\Handout;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingStatusResolver;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
-
-uses(RefreshDatabase::class);
 
 function fuhrparkDeskStandort(): Standort
 {

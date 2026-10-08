@@ -26,12 +26,9 @@ use Hwkdo\IntranetAppFuhrpark\Services\LogbookService;
 use Hwkdo\IntranetAppFuhrpark\Services\VehicleAdminService;
 use Hwkdo\IntranetAppFuhrpark\Services\VehicleAvailabilityService;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
 use Spatie\Permission\Models\Permission;
-
-uses(RefreshDatabase::class);
 
 function fuhrparkStandort(): Standort
 {

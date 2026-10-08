@@ -13,12 +13,9 @@ use Hwkdo\IntranetAppFuhrpark\IntranetAppFuhrpark;
 use Hwkdo\IntranetAppFuhrpark\Models\Booking;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
-
-uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     Permission::findOrCreate('see-app-fuhrpark', 'web');

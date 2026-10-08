@@ -10,10 +10,7 @@ use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingService;
 use Hwkdo\IntranetAppFuhrpark\Services\DriverLicenseService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
-
-uses(RefreshDatabase::class);
 
 test('driver license is valid when valid until and restriction are in the future', function (): void {
     $user = User::factory()->create();

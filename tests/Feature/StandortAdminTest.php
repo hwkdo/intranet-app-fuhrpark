@@ -11,12 +11,9 @@ use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\StandortAdminService;
 use Hwkdo\IntranetAppFuhrpark\Support\FuhrparkModels;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
-
-uses(RefreshDatabase::class);
 
 test('standort admin service lists only marked vehicle standorte for booking', function (): void {
     $vehicleStandort = Standort::query()->create(['name' => 'Fuhrpark']);

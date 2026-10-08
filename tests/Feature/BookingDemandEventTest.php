@@ -10,9 +10,6 @@ use Hwkdo\IntranetAppFuhrpark\Models\BookingDemandEvent;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingDemandEventService;
 use Hwkdo\IntranetAppFuhrpark\Services\FuhrparkAdminStatisticsService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 test('booking demand event service deduplicates identical events within one hour', function (): void {
     $user = User::factory()->create();

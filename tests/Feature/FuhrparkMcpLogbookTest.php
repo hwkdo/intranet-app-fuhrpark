@@ -12,10 +12,7 @@ use Hwkdo\IntranetAppFuhrpark\Models\Handout;
 use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-
-uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     Permission::findOrCreate('see-app-fuhrpark', 'web');

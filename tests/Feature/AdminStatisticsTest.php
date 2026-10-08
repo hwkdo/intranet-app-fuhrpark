@@ -13,11 +13,8 @@ use Hwkdo\IntranetAppFuhrpark\Models\Vehicle;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Models\VehicleReturn;
 use Hwkdo\IntranetAppFuhrpark\Services\FuhrparkAdminStatisticsService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
 use Spatie\Permission\Models\Permission;
-
-uses(RefreshDatabase::class);
 
 function fuhrparkStatisticsVehicle(Standort $standort, string $licensePlate): Vehicle
 {

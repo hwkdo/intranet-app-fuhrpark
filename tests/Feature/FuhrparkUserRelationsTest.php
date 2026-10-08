@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Hwkdo\IntranetAppFuhrpark\Models\DriverLicense;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-uses(RefreshDatabase::class);
 
 test('fuhrpark registers driver license relation on user model without host trait', function (): void {
     $userWithLicense = User::factory()->create();

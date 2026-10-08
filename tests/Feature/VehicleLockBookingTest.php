@@ -16,14 +16,11 @@ use Hwkdo\IntranetAppFuhrpark\Models\VehicleCategory;
 use Hwkdo\IntranetAppFuhrpark\Services\BookingService;
 use Hwkdo\IntranetAppFuhrpark\Services\LogbookService;
 use Hwkdo\IntranetAppFuhrpark\Services\VehicleAdminService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
-
-uses(RefreshDatabase::class);
 
 function vehicleLockStandort(): Standort
 {
