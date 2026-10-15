@@ -14,6 +14,7 @@
         ['label' => 'Führerscheine', 'href' => route('apps.fuhrpark.fuehrerscheine'), 'icon' => 'identification', 'description' => 'Führerscheinkontrollen verwalten', 'buttonText' => 'Führerscheine öffnen', 'permission' => 'manage-app-fuhrpark-driver-licenses'],
         ['label' => 'Benachrichtigungen', 'href' => route('apps.fuhrpark.settings.notifications'), 'icon' => 'bell', 'description' => 'Benachrichtigungen dieser App konfigurieren', 'buttonText' => 'Benachrichtigungen öffnen'],
         ['label' => 'App-Info', 'href' => route('apps.fuhrpark.info'), 'icon' => 'information-circle', 'description' => 'Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
+        ['label' => 'Hintergrund', 'href' => route('apps.fuhrpark.admin.background-activities'), 'icon' => 'clock', 'description' => 'Geplante Tasks, Jobs und Versand', 'buttonText' => 'Hintergrund öffnen', 'permission' => 'manage-app-fuhrpark'],
         ['label' => 'Admin', 'href' => route('apps.fuhrpark.admin.index'), 'icon' => 'shield-check', 'description' => 'Stammdaten und Statistik', 'buttonText' => 'Admin öffnen', 'permission' => 'manage-app-fuhrpark'],
     ];
 

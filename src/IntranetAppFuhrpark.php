@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppFuhrpark;
 
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesBackgroundActivitiesInterface;
+use Hwkdo\IntranetAppFuhrpark\Background\FuhrparkBackgroundActivities;
 use Hwkdo\IntranetAppBase\Data\NotificationTypeDefinition;
 use Hwkdo\IntranetAppBase\Data\SearchActionDefinition;
 use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
@@ -21,7 +23,7 @@ use Hwkdo\IntranetAppFuhrpark\Tasks\MissingLogbookTaskProvider;
 use Hwkdo\IntranetAppFuhrpark\Tasks\NoShowBookingTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesTasksInterface
+class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesBackgroundActivitiesInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -163,4 +165,11 @@ class IntranetAppFuhrpark implements IntranetAppInterface, ProvidesDashboardWidg
             ),
         ];
     }
+
+    public static function backgroundActivities(): array
+    {
+        return FuhrparkBackgroundActivities::definitions();
+    }
+
+
 }

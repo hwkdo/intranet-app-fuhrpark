@@ -60,3 +60,9 @@ Route::middleware(['web', 'auth', 'can:manage-app-fuhrpark'])->group(function ()
 
     Route::redirect('apps/fuhrpark/admin/standorte', '/apps/fuhrpark/admin?tab=standorte')->name('apps.fuhrpark.admin.standorte');
 });
+
+Route::middleware(['web', 'auth', 'can:manage-app-fuhrpark'])->group(function (): void {
+    Volt::route('apps/fuhrpark/admin/background-activities', 'apps.fuhrpark.admin.background-activities')
+        ->name('apps.fuhrpark.admin.background-activities');
+});
+
