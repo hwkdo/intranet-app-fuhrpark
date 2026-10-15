@@ -18,13 +18,14 @@ mount(function (): void {
         'einstellungen',
         'hintergrundbild',
         'statistiken',
+        'hintergrund',
     ], true)) {
         $this->activeTab = $tab;
     }
 });
 
 ?>
-
+<div>
 <x-intranet-app-fuhrpark::fuhrpark-layout heading="Fuhrpark Admin" subheading="Stammdaten und Einstellungen">
     <flux:tab.group>
         <flux:tabs wire:model.live="activeTab">
@@ -36,6 +37,7 @@ mount(function (): void {
             <flux:tab name="einstellungen" icon="cog-6-tooth">Einstellungen</flux:tab>
             <flux:tab name="hintergrundbild" icon="photo">Hintergrund</flux:tab>
             <flux:tab name="statistiken" icon="chart-bar">Statistik</flux:tab>
+            <flux:tab name="hintergrund" icon="clock">Hintergrund</flux:tab>
         </flux:tabs>
 
         <flux:tab.panel name="fahrzeuge">
@@ -105,5 +107,13 @@ mount(function (): void {
                 </div>
             @endif
         </flux:tab.panel>
+    <flux:tab.panel name="hintergrund">
+        @if ($activeTab === 'hintergrund')
+            <div class="min-h-[400px]">
+                @livewire('intranet-app-base::background-activities', ['appIdentifier' => 'fuhrpark'], key('fuhrpark-admin-hintergrund'))
+            </div>
+        @endif
+    </flux:tab.panel>
     </flux:tab.group>
 </x-intranet-app-fuhrpark::fuhrpark-layout>
+</div>

@@ -16,7 +16,7 @@ $isExpiringSoon = computed(fn () => $this->driverLicenseService->isExpiringSoon(
 $licenseBlocksSelfBooking = computed(fn () => ! app(DriverLicenseService::class)->isValid(auth()->user()));
 
 ?>
-
+<div>
 <x-intranet-app-fuhrpark::fuhrpark-layout heading="App-Info" subheading="Installierte Version und Release-Historie">
     <div class="space-y-6">
         <flux:card class="glass-card">
@@ -63,3 +63,4 @@ $licenseBlocksSelfBooking = computed(fn () => ! app(DriverLicenseService::class)
         @livewire('intranet-app-base::app-info', ['appIdentifier' => 'fuhrpark'])
     </div>
 </x-intranet-app-fuhrpark::fuhrpark-layout>
+</div>

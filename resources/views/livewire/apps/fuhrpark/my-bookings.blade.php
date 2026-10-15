@@ -148,7 +148,7 @@ on(['fuhrpark-booking-rescheduled' => function () {
 }]);
 
 ?>
-
+<div>
 <x-intranet-app-fuhrpark::fuhrpark-layout heading="Meine Buchungen" subheading="Übersicht Ihrer Fahrzeugbuchungen">
     <div class="mb-4 flex gap-2">
         <flux:button wire:click="$set('filter', 'open')" :variant="$filter === 'open' ? 'primary' : 'ghost'">Offen</flux:button>
@@ -283,3 +283,4 @@ on(['fuhrpark-booking-rescheduled' => function () {
 
     <livewire:intranet-app-fuhrpark::booking-reschedule />
 </x-intranet-app-fuhrpark::fuhrpark-layout>
+</div>

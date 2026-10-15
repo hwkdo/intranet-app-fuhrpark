@@ -45,7 +45,7 @@ $bookings = computed(function () {
 });
 
 ?>
-
+<div>
 <x-intranet-app-fuhrpark::fuhrpark-layout heading="Mein Team" subheading="Buchungen Ihrer Mitarbeitenden">
     @if($this->teamMemberIds->isEmpty())
         <flux:callout>Keine Teammitglieder gefunden oder keine Vorgesetzten-Berechtigung.</flux:callout>
@@ -73,3 +73,4 @@ $bookings = computed(function () {
         </flux:table>
     @endif
 </x-intranet-app-fuhrpark::fuhrpark-layout>
+</div>

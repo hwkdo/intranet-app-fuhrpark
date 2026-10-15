@@ -248,7 +248,7 @@ new #[Title('Fuhrpark - Führerscheine')] class extends Component
         $this->resetValidation();
     }
 }; ?>
-
+<div>
 <x-intranet-app-fuhrpark::fuhrpark-layout heading="Führerscheine" subheading="Kontrollen und Verlängerungen verwalten">
     <div class="space-y-6">
         <flux:card class="glass-card">
@@ -395,3 +395,4 @@ new #[Title('Fuhrpark - Führerscheine')] class extends Component
         @endif
     </flux:modal>
 </x-intranet-app-fuhrpark::fuhrpark-layout>
+</div>
