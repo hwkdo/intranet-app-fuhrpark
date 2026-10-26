@@ -49,6 +49,12 @@ $hasApiKey = computed(fn (): bool => $this->apiKey !== '');
                 'provider' => 'openwebui-completions',
                 'useMcpTools' => true,
                 'additionalSystemPrompt' => FuhrparkAiChatSystemPrompt::additionalPrompt(),
+                'suggestions' => [
+                    'Welche Fahrzeuge sind morgen frei?',
+                    'Buche mir ein Auto für Freitag von 8 bis 12 Uhr.',
+                    'Zeig mir meine anstehenden Buchungen.',
+                    'Für welche Fahrten fehlt noch ein Fahrtenbuch-Eintrag?',
+                ],
             ])
         @else
             <flux:card class="glass-card">
