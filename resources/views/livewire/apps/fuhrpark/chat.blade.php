@@ -31,7 +31,7 @@ $model = computed(function () {
 });
 
 $baseUrl = computed(function () {
-    return (string) config('openwebui-api-laravel.base_api_url_ollama', 'https://chat.ai.hwk-do.com/api');
+    return (string) config('openwebui-api-laravel.base_api_url', 'https://chat.ai.hwk-do.com/api');
 });
 
 $hasApiKey = computed(fn (): bool => $this->apiKey !== '');
@@ -46,6 +46,7 @@ $hasApiKey = computed(fn (): bool => $this->apiKey !== '');
                 'model' => $this->model,
                 'apiKey' => $this->apiKey,
                 'baseUrl' => $this->baseUrl,
+                'provider' => 'openwebui-completions',
                 'useMcpTools' => true,
                 'additionalSystemPrompt' => FuhrparkAiChatSystemPrompt::additionalPrompt(),
             ])
