@@ -51,5 +51,7 @@ it('hat klare server instructions fuer den buchungs flow', function (): void {
         ->toContain('buchung_loeschen')
         ->toContain('fahrtenbuch_eintragen')
         ->toContain('fehlende_fahrtenbuecher_anzeigen')
-        ->toContain('returned');
+        ->toContain('returned')
+        ->toContain('sync_to_calendar')
+        ->toContain('needs_calendar_decision');
 });

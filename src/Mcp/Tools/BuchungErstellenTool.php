@@ -25,7 +25,7 @@ class BuchungErstellenTool extends Tool
 {
     protected string $name = 'buchung_erstellen';
 
-    protected string $description = 'Bucht ein Fahrzeug für einen Zeitraum. Vorher buchung_optionen_auflisten nutzen, um verfügbare Standorte und Kategorien zu ermitteln. Bei Buchung für andere Personen zuerst benutzer_suchen für driver_id. Bei E-Fahrzeugen ist electric_route_km Pflicht.';
+    protected string $description = 'Bucht ein Fahrzeug für einen Zeitraum. Vorher buchung_optionen_auflisten nutzen, um verfügbare Standorte und Kategorien zu ermitteln. Bei Buchung für andere Personen zuerst benutzer_suchen für driver_id. Bei E-Fahrzeugen ist electric_route_km Pflicht. sync_to_calendar nur übergeben, wenn der Nutzer den Outlook-Kalendereintrag ausdrücklich bejaht oder abgelehnt hat. Fehlt der Parameter, wird nicht gebucht; dann den Nutzer fragen und den Aufruf mit true oder false wiederholen.';
 
     public function handle(Request $request): Response|ResponseFactory
     {
@@ -109,6 +109,18 @@ class BuchungErstellenTool extends Tool
             ]);
         }
 
+        $syncToCalendar = $this->explicitSyncToCalendar($request);
+
+        if ($syncToCalendar === null) {
+            return Response::structured([
+                'success' => false,
+                'needs_calendar_decision' => true,
+                'message' => 'Die Buchung wurde noch nicht erstellt. Der Nutzer hat nicht gesagt, ob ein Outlook-Kalendereintrag angelegt werden soll. Frage ihn jetzt und warte auf die Antwort. buchung_erstellen nicht erneut aufrufen, bevor er geantwortet hat. Danach denselben Aufruf mit sync_to_calendar true (Zusage) oder false (Absage) wiederholen. Nicht raten.',
+                'question' => 'Soll ich für diese Buchung einen Eintrag in deinem Outlook-Kalender anlegen?',
+                'next_step' => 'nutzer_nach_kalendereintrag_fragen',
+            ]);
+        }
+
         $driverId = isset($validated['driver_id'])
             ? (int) $validated['driver_id']
             : (int) $user->getAuthIdentifier();
@@ -124,7 +136,7 @@ class BuchungErstellenTool extends Tool
                     standortId: $standortId,
                     isCommute: (bool) ($validated['is_commute'] ?? false),
                     electricRouteKm: $electricRouteKm,
-                    syncToCalendar: (bool) ($validated['sync_to_calendar'] ?? false),
+                    syncToCalendar: $syncToCalendar,
                 ),
                 $user,
             );
@@ -174,7 +186,7 @@ class BuchungErstellenTool extends Tool
                 ->description('Pflicht bei E-Fahrzeugen: geplante Strecke in km.')
                 ->nullable(),
             'sync_to_calendar' => $schema->boolean()
-                ->description('Optional: Buchung in Outlook-Kalender synchronisieren.')
+                ->description('Nur setzen, wenn der Nutzer den Outlook-Kalendereintrag ausdrücklich genannt hat: true = anlegen, false = ausdrücklich nicht anlegen. Weglassen, wenn es nicht erwähnt wurde — dann wird nicht gebucht und der Nutzer muss gefragt werden.')
                 ->nullable(),
         ];
     }
@@ -188,6 +200,25 @@ class BuchungErstellenTool extends Tool
             'errors' => $schema->object()->nullable(),
             'available_categories' => $schema->array()->nullable(),
             'next_step' => $schema->string()->nullable(),
+            'needs_calendar_decision' => $schema->boolean()->nullable(),
+            'question' => $schema->string()->nullable(),
         ];
+    }
+
+    private function explicitSyncToCalendar(Request $request): ?bool
+    {
+        if (! array_key_exists('sync_to_calendar', $request->all())) {
+            return null;
+        }
+
+        $value = $request->get('sync_to_calendar');
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $decision = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+        return is_bool($decision) ? $decision : null;
     }
 }
